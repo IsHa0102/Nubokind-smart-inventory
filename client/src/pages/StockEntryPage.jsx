@@ -87,7 +87,7 @@ function StockEntryPage() {
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-slate-900">Stock Entry</h2>
-      <form onSubmit={onSubmit} className="grid gap-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <form onSubmit={onSubmit} className="grid gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
         <label className="grid gap-2 text-sm font-medium text-slate-700">
           Product *
           <select
@@ -177,7 +177,7 @@ function StockEntryPage() {
 
         {message ? <p className="text-sm text-indigo-700">{message}</p> : null}
 
-        <button type="submit" className="w-fit rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-500">
+        <button type="submit" className="w-full rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-500 sm:w-fit">
           Save Entry
         </button>
       </form>

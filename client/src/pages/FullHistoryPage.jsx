@@ -85,7 +85,7 @@ function FullHistoryPage() {
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-slate-900">Inventory History</h2>
 
-      <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-4">
+      <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-2 xl:grid-cols-4">
         <select
           value={filters.productId}
           onChange={(event) => updateFilter("productId", event.target.value)}
@@ -133,15 +133,16 @@ function FullHistoryPage() {
           <div className="space-y-3">
             {entries.map((entry) => (
               <div key={entry.id} className="rounded-lg border border-slate-200 p-3">
-                <button
-                  type="button"
-                  onClick={() => toggleExpanded(entry.id)}
-                  className="grid w-full gap-2 text-left md:grid-cols-5"
-                >
+                <button type="button" onClick={() => toggleExpanded(entry.id)} className="grid w-full gap-2 text-left md:grid-cols-5">
+                  <div className="text-xs uppercase tracking-wide text-slate-500 md:hidden">Amount</div>
                   <p className="text-sm font-semibold text-slate-900">{getSignedQuantity(entry)}</p>
+                  <div className="text-xs uppercase tracking-wide text-slate-500 md:hidden">Product</div>
                   <p className="text-sm font-medium text-slate-900">{entry.product_name}</p>
+                  <div className="text-xs uppercase tracking-wide text-slate-500 md:hidden">Movement</div>
                   <p className="text-sm text-slate-600">{getMovementLabel(entry)}</p>
+                  <div className="text-xs uppercase tracking-wide text-slate-500 md:hidden">Type</div>
                   <p className="text-sm text-slate-500">{entry.type}</p>
+                  <div className="text-xs uppercase tracking-wide text-slate-500 md:hidden">Date</div>
                   <p className="text-sm text-slate-500">{formatDate(entry.created_at)}</p>
                 </button>
 
@@ -172,7 +173,7 @@ function FullHistoryPage() {
           </div>
         ) : null}
 
-        <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4">
+        <div className="mt-4 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-slate-500">
             Showing page {meta.page} of {meta.totalPages} ({meta.total} entries)
           </p>

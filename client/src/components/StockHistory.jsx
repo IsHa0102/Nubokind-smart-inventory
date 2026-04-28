@@ -57,12 +57,12 @@ function StockHistory() {
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h3 className="text-lg font-semibold text-slate-900">Recent Stock Activity</h3>
         <button
           type="button"
           onClick={() => navigate("/inventory-history")}
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:w-auto"
         >
           View All
         </button>
@@ -75,20 +75,20 @@ function StockHistory() {
         <div className="space-y-3">
           {rows.map((entry) => (
             <div key={entry.id} className="rounded-lg border border-slate-200 p-3">
-              <button
-                type="button"
-                onClick={() => toggleExpanded(entry.id)}
-                className="grid w-full gap-2 text-left md:grid-cols-4"
-              >
-                <div>
+              <button type="button" onClick={() => toggleExpanded(entry.id)} className="grid w-full gap-2 text-left md:grid-cols-4">
+                <div className="text-xs uppercase tracking-wide text-slate-500 md:hidden">Amount</div>
+                <div className="md:row-start-1">
                   <p
                     className={`inline-flex rounded px-2 py-1 text-sm font-semibold ${typeStyleMap[entry.type] || ""}`}
                   >
                     {getSignedQuantity(entry)}
                   </p>
                 </div>
+                <div className="text-xs uppercase tracking-wide text-slate-500 md:hidden">Product</div>
                 <p className="text-sm font-medium text-slate-900">{entry.product_name}</p>
+                <div className="text-xs uppercase tracking-wide text-slate-500 md:hidden">Movement</div>
                 <p className="text-sm text-slate-600">{getMovementLabel(entry)}</p>
+                <div className="text-xs uppercase tracking-wide text-slate-500 md:hidden">Date</div>
                 <p className="text-sm text-slate-500">{formatDate(entry.created_at)}</p>
               </button>
 

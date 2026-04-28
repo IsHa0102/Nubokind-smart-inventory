@@ -12,8 +12,8 @@ function MovementChart({ data }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <h3 className="mb-4 text-lg font-semibold text-slate-900">Stock Movement (Last 7 Days)</h3>
-      <div className="h-72 w-full">
-        <ResponsiveContainer>
+      <div className="h-64 min-w-0 w-full sm:h-72">
+        <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="day" />
