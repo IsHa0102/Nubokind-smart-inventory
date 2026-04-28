@@ -8,8 +8,12 @@ const {
 const {
   getManufacturers,
   createManufacturer,
+  updateManufacturer,
+  deleteManufacturer,
   getDestinations,
   createDestination,
+  updateDestination,
+  deleteDestination,
 } = require("../controllers/adminController")
 const { getInventoryEntries, createInventoryEntry } = require("../controllers/inventoryController")
 const { fetchDashboardStats, fetchStockMovement } = require("../controllers/dashboardController")
@@ -24,8 +28,12 @@ router.delete("/products/:id", deleteProduct)
 
 router.get("/manufacturers", getManufacturers)
 router.post("/manufacturers", createManufacturer)
+router.put("/manufacturers/:id", updateManufacturer)
+router.delete("/manufacturers/:id", deleteManufacturer)
 router.get("/destinations", getDestinations)
 router.post("/destinations", createDestination)
+router.put("/destinations/:id", updateDestination)
+router.delete("/destinations/:id", deleteDestination)
 
 router.get("/inventory-entries", getInventoryEntries)
 router.post("/inventory-entries", upload.array("images", 3), createInventoryEntry)

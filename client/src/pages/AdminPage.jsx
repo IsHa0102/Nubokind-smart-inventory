@@ -1,20 +1,20 @@
 import { useEffect, useState } from "react"
-import {
-  createDestination,
-  createManufacturer,
-  createProduct,
-  fetchDestinations,
-  fetchManufacturers,
-  fetchProducts,
-} from "../api/inventoryApi"
+import { fetchDestinations, fetchManufacturers, fetchProducts } from "../api/inventoryApi"
+import DestinationList from "../components/DestinationList"
+import ManufacturerList from "../components/ManufacturerList"
+import ProductList from "../components/ProductList"
+import { ToastContainer, useToasts } from "../components/Toast"
 
 function AdminPage() {
   const [products, setProducts] = useState([])
   const [manufacturers, setManufacturers] = useState([])
   const [destinations, setDestinations] = useState([])
-  const [productForm, setProductForm] = useState({ name: "", stock: "", low_stock_threshold: "" })
-  const [manufacturerName, setManufacturerName] = useState("")
-  const [destinationName, setDestinationName] = useState("")
+
+  const [productSearch, setProductSearch] = useState("")
+  const [mfrSearch, setMfrSearch] = useState("")
+  const [destSearch, setDestSearch] = useState("")
+
+  const { toasts, addToast, removeToast } = useToasts()
 
   const loadData = async () => {
     const [p, m, d] = await Promise.all([fetchProducts(), fetchManufacturers(), fetchDestinations()])
@@ -27,103 +27,61 @@ function AdminPage() {
     loadData()
   }, [])
 
-  const handleCreateProduct = async (event) => {
-    event.preventDefault()
-    await createProduct({
-      ...productForm,
-      stock: Number(productForm.stock),
-      low_stock_threshold: Number(productForm.low_stock_threshold),
-    })
-    setProductForm({ name: "", stock: "", low_stock_threshold: "" })
-    loadData()
-  }
-
-  const handleCreateManufacturer = async (event) => {
-    event.preventDefault()
-    await createManufacturer({ name: manufacturerName })
-    setManufacturerName("")
-    loadData()
-  }
-
-  const handleCreateDestination = async (event) => {
-    event.preventDefault()
-    await createDestination({ name: destinationName })
-    setDestinationName("")
-    loadData()
-  }
-
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-slate-900">Admin</h2>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <form onSubmit={handleCreateProduct} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h3 className="text-lg font-semibold">Add Product</h3>
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* ── Products ── */}
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-slate-900">Products</h3>
+            <span className="text-xs font-medium text-slate-500">{products.length} total</span>
+          </div>
           <input
-            required
-            placeholder="Product name"
-            value={productForm.name}
-            onChange={(event) => setProductForm((prev) => ({ ...prev, name: event.target.value }))}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2"
+            placeholder="Search products…"
+            value={productSearch}
+            onChange={(e) => setProductSearch(e.target.value)}
+            className="mb-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
           />
-          <input
-            required
-            type="number"
-            min="0"
-            placeholder="Stock"
-            value={productForm.stock}
-            onChange={(event) => setProductForm((prev) => ({ ...prev, stock: event.target.value }))}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2"
-          />
-          <input
-            required
-            type="number"
-            min="0"
-            placeholder="Low stock threshold"
-            value={productForm.low_stock_threshold}
-            onChange={(event) => setProductForm((prev) => ({ ...prev, low_stock_threshold: event.target.value }))}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2"
-          />
-          <button className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Add Product</button>
-          <p className="text-xs text-slate-500">Current products: {products.length}</p>
-        </form>
+          <ProductList products={products} onRefresh={loadData} addToast={addToast} search={productSearch} />
+        </div>
 
-        <form onSubmit={handleCreateManufacturer} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h3 className="text-lg font-semibold">Manage Manufacturers</h3>
+        {/* ── Manufacturers ── */}
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-slate-900">Manufacturers</h3>
+            <span className="text-xs font-medium text-slate-500">{manufacturers.length} total</span>
+          </div>
           <input
-            required
-            placeholder="Manufacturer name"
-            value={manufacturerName}
-            onChange={(event) => setManufacturerName(event.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2"
+            placeholder="Search manufacturers…"
+            value={mfrSearch}
+            onChange={(e) => setMfrSearch(e.target.value)}
+            className="mb-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
           />
-          <button className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Add Manufacturer</button>
-          <ul className="list-disc pl-5 text-sm text-slate-600">
-            {manufacturers.map((item) => (
-              <li key={item.id}>{item.name}</li>
-            ))}
-          </ul>
-        </form>
+          <ManufacturerList manufacturers={manufacturers} onRefresh={loadData} addToast={addToast} search={mfrSearch} />
+        </div>
 
-        <form onSubmit={handleCreateDestination} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h3 className="text-lg font-semibold">Manage Destinations</h3>
+        {/* ── Destinations ── */}
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-slate-900">Destinations</h3>
+            <span className="text-xs font-medium text-slate-500">{destinations.length} total</span>
+          </div>
           <input
-            required
-            placeholder="Destination name"
-            value={destinationName}
-            onChange={(event) => setDestinationName(event.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2"
+            placeholder="Search destinations…"
+            value={destSearch}
+            onChange={(e) => setDestSearch(e.target.value)}
+            className="mb-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
           />
-          <button className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Add Destination</button>
-          <ul className="list-disc pl-5 text-sm text-slate-600">
-            {destinations.map((item) => (
-              <li key={item.id}>{item.name}</li>
-            ))}
-          </ul>
-        </form>
+          <DestinationList destinations={destinations} onRefresh={loadData} addToast={addToast} search={destSearch} />
+        </div>
       </div>
+
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>
   )
 }
 
 export default AdminPage
+

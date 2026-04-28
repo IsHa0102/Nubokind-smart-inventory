@@ -36,6 +36,16 @@ const updateProduct = async (req, res) => {
 
 const deleteProduct = async (req, res) => {
   const { id } = req.params
+  // Safety: block deletion if inventory entries exist (would cascade-delete history)
+  const usageCheck = await pool.query(
+    "SELECT COUNT(*)::int AS cnt FROM inventory_entries WHERE product_id = $1",
+    [id]
+  )
+  if (usageCheck.rows[0].cnt > 0) {
+    return res.status(409).json({
+      message: `Cannot delete this product — it has ${usageCheck.rows[0].cnt} inventory entry/entries. Archive it instead.`,
+    })
+  }
   const result = await pool.query("DELETE FROM products WHERE id = $1 RETURNING id", [id])
   if (!result.rows.length) return res.status(404).json({ message: "Product not found." })
   return res.status(204).send()
