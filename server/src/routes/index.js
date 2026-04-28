@@ -11,7 +11,7 @@ const {
   getDestinations,
   createDestination,
 } = require("../controllers/adminController")
-const { createInventoryEntry } = require("../controllers/inventoryController")
+const { getInventoryEntries, createInventoryEntry } = require("../controllers/inventoryController")
 const { fetchDashboardStats, fetchStockMovement } = require("../controllers/dashboardController")
 const upload = require("../middleware/upload")
 
@@ -27,6 +27,7 @@ router.post("/manufacturers", createManufacturer)
 router.get("/destinations", getDestinations)
 router.post("/destinations", createDestination)
 
+router.get("/inventory-entries", getInventoryEntries)
 router.post("/inventory-entries", upload.array("images", 3), createInventoryEntry)
 
 router.get("/dashboard/stats", fetchDashboardStats)

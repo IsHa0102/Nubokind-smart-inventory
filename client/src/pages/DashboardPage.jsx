@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import MetricCard from "../components/MetricCard"
 import MovementChart from "../components/MovementChart"
+import StockHistory from "../components/StockHistory"
 import { fetchDashboardStats, fetchStockMovement } from "../api/inventoryApi"
 
 function DashboardPage() {
@@ -32,6 +33,7 @@ function DashboardPage() {
       </div>
 
       <MovementChart data={movement} />
+      <StockHistory />
     </div>
   )
 }

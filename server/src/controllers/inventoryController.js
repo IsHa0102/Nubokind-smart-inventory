@@ -1,5 +1,75 @@
 const pool = require("../config/db")
 
+const getInventoryEntries = async (req, res) => {
+  const page = Math.max(Number(req.query.page) || 1, 1)
+  const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 100)
+  const offset = (page - 1) * limit
+  const { productId, type, from, to } = req.query
+
+  const where = []
+  const values = []
+
+  if (productId) {
+    values.push(Number(productId))
+    where.push(`ie.product_id = $${values.length}`)
+  }
+
+  if (type && ["add", "remove", "adjustment"].includes(type)) {
+    values.push(type)
+    where.push(`ie.type = $${values.length}`)
+  }
+
+  if (from) {
+    values.push(from)
+    where.push(`ie.created_at >= $${values.length}::timestamptz`)
+  }
+
+  if (to) {
+    values.push(to)
+    where.push(`ie.created_at <= $${values.length}::timestamptz`)
+  }
+
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : ""
+
+  const countQuery = `
+    SELECT COUNT(*)::int AS total
+    FROM inventory_entries ie
+    ${whereSql}
+  `
+  const countResult = await pool.query(countQuery, values)
+  const total = countResult.rows[0]?.total || 0
+
+  const dataValues = [...values, limit, offset]
+  const dataQuery = `
+    SELECT
+      ie.id,
+      ie.product_id,
+      p.name AS product_name,
+      ie.type,
+      ie.quantity,
+      ie.source,
+      ie.destination,
+      ie.remarks,
+      ie.images,
+      ie.created_at
+    FROM inventory_entries ie
+    JOIN products p ON p.id = ie.product_id
+    ${whereSql}
+    ORDER BY ie.created_at DESC
+    LIMIT $${dataValues.length - 1}
+    OFFSET $${dataValues.length}
+  `
+  const result = await pool.query(dataQuery, dataValues)
+
+  return res.json({
+    items: result.rows,
+    total,
+    page,
+    limit,
+    totalPages: Math.max(Math.ceil(total / limit), 1),
+  })
+}
+
 const createInventoryEntry = async (req, res) => {
   const { product_id, type, quantity, source, destination, remarks } = req.body
   const images = (req.files || []).map((file) => file.originalname)
@@ -52,4 +122,4 @@ const createInventoryEntry = async (req, res) => {
   }
 }
 
-module.exports = { createInventoryEntry }
+module.exports = { getInventoryEntries, createInventoryEntry }

@@ -46,3 +46,13 @@ export const createInventoryEntry = async (formData) => {
   })
   return data
 }
+
+export const fetchInventoryEntries = async (params = {}) => {
+  const { data } = await apiClient.get("/inventory-entries", { params })
+  return data
+}
+
+export const fetchRecentInventoryEntries = async (limit = 7) => {
+  const data = await fetchInventoryEntries({ page: 1, limit })
+  return data
+}
