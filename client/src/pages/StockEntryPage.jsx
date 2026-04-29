@@ -20,6 +20,8 @@ function StockEntryPage() {
     remarks: "",
     images: [],
   })
+  const [imagePreviews, setImagePreviews] = useState([])
+  const [fileInputKey, setFileInputKey] = useState(0)
 
   useEffect(() => {
     Promise.all([fetchProducts(), fetchManufacturers(), fetchDestinations()]).then(([p, m, d]) => {
@@ -41,8 +43,25 @@ function StockEntryPage() {
   }
 
   const onFileChange = (event) => {
-    const selected = Array.from(event.target.files || [])
-    setForm((prev) => ({ ...prev, images: selected.slice(0, 3) }))
+    const incoming = Array.from(event.target.files || [])
+    // Merge with existing images, cap at 3
+    const combined = [...form.images, ...incoming].slice(0, 3)
+    // Revoke old preview URLs before creating new ones
+    imagePreviews.forEach((url) => URL.revokeObjectURL(url))
+    const previews = combined.map((file) => URL.createObjectURL(file))
+    setForm((prev) => ({ ...prev, images: combined }))
+    setImagePreviews(previews)
+    // Reset input value so the same file can be added again if needed
+    setFileInputKey((k) => k + 1)
+  }
+
+  const removeImage = (index) => {
+    URL.revokeObjectURL(imagePreviews[index])
+    const newImages = form.images.filter((_, i) => i !== index)
+    const newPreviews = imagePreviews.filter((_, i) => i !== index)
+    setForm((prev) => ({ ...prev, images: newImages }))
+    setImagePreviews(newPreviews)
+    setFileInputKey((k) => k + 1)
   }
 
   const validate = () => {
@@ -73,6 +92,9 @@ function StockEntryPage() {
 
     await createInventoryEntry(payload)
     setMessage("Stock entry saved successfully.")
+    imagePreviews.forEach((url) => URL.revokeObjectURL(url))
+    setImagePreviews([])
+    setFileInputKey((k) => k + 1)
     setForm({
       product_id: "",
       type: "add",
@@ -110,7 +132,7 @@ function StockEntryPage() {
           <select name="type" value={form.type} onChange={onChange} className="rounded-lg border border-slate-300 px-3 py-2">
             <option value="add">Add</option>
             <option value="remove">Remove</option>
-            <option value="adjustment">Adjustment</option>
+            <option value="adjustment">Recount</option>
           </select>
         </label>
 
@@ -128,9 +150,9 @@ function StockEntryPage() {
 
         {typeFields === "source" ? (
           <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Where From *
+            From *
             <select name="source" value={form.source} onChange={onChange} className="rounded-lg border border-slate-300 px-3 py-2">
-              <option value="">Select manufacturer</option>
+              <option value="">Select source</option>
               {manufacturers.map((item) => (
                 <option key={item.id} value={item.name}>
                   {item.name}
@@ -142,7 +164,7 @@ function StockEntryPage() {
 
         {typeFields === "destination" ? (
           <label className="grid gap-2 text-sm font-medium text-slate-700">
-            Where To *
+            To *
             <select
               name="destination"
               value={form.destination}
@@ -170,10 +192,43 @@ function StockEntryPage() {
           />
         </label>
 
-        <label className="grid gap-2 text-sm font-medium text-slate-700">
-          Upload Images (max 3)
-          <input type="file" accept="image/*" multiple onChange={onFileChange} className="rounded-lg border border-slate-300 p-2" />
-        </label>
+        <div className="grid gap-2">
+          <p className="text-sm font-medium text-slate-700">
+            Images (max 3){" "}
+            {form.images.length > 0 && (
+              <span className="font-normal text-slate-400">— {form.images.length} selected</span>
+            )}
+          </p>
+          {form.images.length < 3 && (
+            <input
+              key={fileInputKey}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={onFileChange}
+              className="rounded-lg border border-slate-300 p-2 text-sm"
+            />
+          )}
+          {imagePreviews.length > 0 && (
+            <div className="mt-1 grid grid-cols-3 gap-2">
+              {imagePreviews.map((preview, index) => (
+                <div key={index} className="relative group">
+                  <img src={preview} alt={`Preview ${index + 1}`} className="h-20 w-full rounded-lg object-cover border border-slate-200" />
+                  <button
+                    type="button"
+                    onClick={() => removeImage(index)}
+                    className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow-lg transition hover:bg-red-600 opacity-0 group-hover:opacity-100"
+                  >
+                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                  <span className="absolute bottom-1 left-1 rounded bg-black/40 px-1 text-[10px] text-white">{index + 1}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {message ? <p className="text-sm text-indigo-700">{message}</p> : null}
 

@@ -21,7 +21,7 @@ function MovementChart({ data }) {
             <Tooltip />
             <Line type="monotone" dataKey="add" stroke="#2563eb" strokeWidth={2} />
             <Line type="monotone" dataKey="remove" stroke="#dc2626" strokeWidth={2} />
-            <Line type="monotone" dataKey="adjustment" stroke="#059669" strokeWidth={2} />
+            <Line type="monotone" dataKey="adjustment" stroke="#d97706" strokeWidth={2} />
           </LineChart>
         </ResponsiveContainer>
       </div>

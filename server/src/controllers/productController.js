@@ -6,29 +6,65 @@ const getProducts = async (_req, res) => {
 }
 
 const createProduct = async (req, res) => {
-  const { name, stock, low_stock_threshold } = req.body
-  if (!name || stock === undefined || low_stock_threshold === undefined) {
-    return res.status(400).json({ message: "name, stock and low_stock_threshold are required." })
+  const { name, stock, low_stock_threshold, item_type } = req.body
+  if (!name || stock === undefined || low_stock_threshold === undefined || !item_type) {
+    return res.status(400).json({ message: "name, stock, low_stock_threshold, and item_type are required." })
+  }
+  if (!['Product', 'Packaging'].includes(item_type)) {
+    return res.status(400).json({ message: "item_type must be 'Product' or 'Packaging'." })
   }
 
   const result = await pool.query(
-    `INSERT INTO products (name, stock, low_stock_threshold)
-     VALUES ($1, $2, $3)
+    `INSERT INTO products (name, stock, low_stock_threshold, item_type)
+     VALUES ($1, $2, $3, $4)
      RETURNING *`,
-    [name, Number(stock), Number(low_stock_threshold)]
+    [name, Number(stock), Number(low_stock_threshold), item_type]
   )
   return res.status(201).json(result.rows[0])
 }
 
 const updateProduct = async (req, res) => {
   const { id } = req.params
-  const { name, stock, low_stock_threshold } = req.body
+  const { name, stock, low_stock_threshold, item_type } = req.body
+  const updates = []
+  const values = []
+  let paramIndex = 1
+
+  if (name !== undefined) {
+    updates.push(`name = $${paramIndex}`)
+    values.push(name)
+    paramIndex++
+  }
+  if (stock !== undefined) {
+    updates.push(`stock = $${paramIndex}`)
+    values.push(Number(stock))
+    paramIndex++
+  }
+  if (low_stock_threshold !== undefined) {
+    updates.push(`low_stock_threshold = $${paramIndex}`)
+    values.push(Number(low_stock_threshold))
+    paramIndex++
+  }
+  if (item_type !== undefined) {
+    if (!['Product', 'Packaging'].includes(item_type)) {
+      return res.status(400).json({ message: "item_type must be 'Product' or 'Packaging'." })
+    }
+    updates.push(`item_type = $${paramIndex}`)
+    values.push(item_type)
+    paramIndex++
+  }
+
+  if (updates.length === 0) {
+    return res.status(400).json({ message: "No fields to update." })
+  }
+
+  values.push(id)
   const result = await pool.query(
     `UPDATE products
-     SET name = $1, stock = $2, low_stock_threshold = $3
-     WHERE id = $4
+     SET ${updates.join(', ')}
+     WHERE id = $${paramIndex}
      RETURNING *`,
-    [name, Number(stock), Number(low_stock_threshold), id]
+    values
   )
   if (!result.rows.length) return res.status(404).json({ message: "Product not found." })
   return res.json(result.rows[0])

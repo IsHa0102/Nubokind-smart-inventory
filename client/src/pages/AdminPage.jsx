@@ -32,10 +32,10 @@ function AdminPage() {
       <h2 className="text-2xl font-bold text-slate-900">Admin</h2>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* ── Products ── */}
+        {/* ── Items ── */}
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-slate-900">Products</h3>
+            <h3 className="text-lg font-semibold text-slate-900">Items</h3>
             <span className="text-xs font-medium text-slate-500">{products.length} total</span>
           </div>
           <input
