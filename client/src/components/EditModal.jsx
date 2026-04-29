@@ -59,15 +59,29 @@ function EditModal({ isOpen, title, fields, initialValues, onSave, onClose, savi
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
                 {field.label}
               </label>
-              <input
-                ref={idx === 0 ? firstRef : undefined}
-                type={field.type || "text"}
-                min={field.min}
-                required={field.required !== false}
-                value={values[field.key] ?? ""}
-                onChange={(e) => setValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200 transition"
-              />
+              {field.type === 'select' ? (
+                <select
+                  ref={idx === 0 ? firstRef : undefined}
+                  required={field.required !== false}
+                  value={values[field.key] ?? ""}
+                  onChange={(e) => setValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200 transition"
+                >
+                  {field.options.map(option => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  ref={idx === 0 ? firstRef : undefined}
+                  type={field.type || "text"}
+                  min={field.min}
+                  required={field.required !== false}
+                  value={values[field.key] ?? ""}
+                  onChange={(e) => setValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200 transition"
+                />
+              )}
             </div>
           ))}
 

@@ -2,7 +2,8 @@ CREATE TABLE IF NOT EXISTS products (
   id BIGSERIAL PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
   stock INTEGER NOT NULL DEFAULT 0,
-  low_stock_threshold INTEGER NOT NULL DEFAULT 5
+  low_stock_threshold INTEGER NOT NULL DEFAULT 5,
+  item_type TEXT NOT NULL DEFAULT 'Product' CHECK (item_type IN ('Product', 'Packaging'))
 );
 
 CREATE TABLE IF NOT EXISTS manufacturers (
