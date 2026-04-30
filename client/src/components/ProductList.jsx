@@ -199,7 +199,7 @@ function ProductList({ products, onRefresh, addToast, search }) {
         fields={PRODUCT_FIELDS}
         initialValues={editTarget ? {
           name: editTarget.name,
-          item_type: editTarget.item_type,
+          item_type: editTarget.item_type || 'Product',
           stock: String(editTarget.stock),
           low_stock_threshold: String(editTarget.low_stock_threshold),
         } : {}}

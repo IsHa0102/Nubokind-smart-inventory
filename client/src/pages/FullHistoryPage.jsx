@@ -18,69 +18,81 @@ const getSignedQuantity = (entry) => {
   return `=${entry.quantity}`
 }
 
-// Simple lightbox for viewing uploaded images by filename
+// Images are full Supabase public URLs — just render them directly
 function ImageModal({ images, onClose }) {
   const [current, setCurrent] = useState(0)
-  // Images are stored as filenames only (no URL available in this setup)
-  // Show filename and a placeholder note
+  const [errored, setErrored] = useState({})
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="relative mx-4 w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"
+        className="relative mx-4 w-full max-w-xl rounded-2xl bg-white shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <button
-          onClick={onClose}
-          className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200"
-        >
-          ✕
-        </button>
-        <h3 className="mb-4 text-base font-semibold text-slate-800">
-          Image {current + 1} of {images.length}
-        </h3>
-        <div className="flex min-h-[180px] items-center justify-center rounded-xl border border-slate-200 bg-slate-50 p-6 text-center">
-          <div>
-            <div className="mb-3 text-4xl">🖼️</div>
-            <p className="text-sm font-medium text-slate-700">{images[current]}</p>
-            <p className="mt-2 text-xs text-slate-400">
-              Images are stored on the server. To view, configure your server to serve uploaded files.
-            </p>
-          </div>
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
+          <h3 className="text-sm font-semibold text-slate-800">
+            Image {current + 1} of {images.length}
+          </h3>
+          <button
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 text-sm"
+          >
+            ✕
+          </button>
         </div>
+
+        {/* Image viewer */}
+        <div className="flex items-center justify-center bg-slate-900 min-h-[300px] max-h-[60vh]">
+          {errored[current] ? (
+            <div className="text-center text-slate-400 p-8">
+              <div className="text-4xl mb-2">🖼️</div>
+              <p className="text-xs mt-1 text-slate-500">Could not load image</p>
+            </div>
+          ) : (
+            <img
+              key={current}
+              src={images[current]}
+              alt={`Image ${current + 1}`}
+              className="max-h-[60vh] max-w-full object-contain"
+              onError={() => setErrored((prev) => ({ ...prev, [current]: true }))}
+            />
+          )}
+        </div>
+
+        {/* Navigation */}
         {images.length > 1 && (
-          <div className="mt-4 flex justify-center gap-2">
-            {images.map((img, i) => (
-              <button
-                key={i}
-                onClick={() => setCurrent(i)}
-                className={`rounded-lg border px-3 py-1 text-xs font-medium transition ${
-                  i === current
-                    ? "border-indigo-400 bg-indigo-50 text-indigo-700"
-                    : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
-                }`}
-              >
-                {i + 1}
-              </button>
-            ))}
+          <div className="border-t border-slate-100 px-5 py-3 flex items-center gap-2">
+            <button
+              onClick={() => setCurrent((c) => Math.max(0, c - 1))}
+              disabled={current === 0}
+              className="rounded-lg border border-slate-200 px-3 py-1 text-xs disabled:opacity-40 hover:bg-slate-50"
+            >
+              ← Prev
+            </button>
+            <div className="flex flex-1 justify-center gap-1">
+              {images.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setCurrent(i)}
+                  className={`h-2 w-2 rounded-full transition ${
+                    i === current ? "bg-indigo-500" : "bg-slate-300 hover:bg-slate-400"
+                  }`}
+                />
+              ))}
+            </div>
+            <button
+              onClick={() => setCurrent((c) => Math.min(images.length - 1, c + 1))}
+              disabled={current === images.length - 1}
+              className="rounded-lg border border-slate-200 px-3 py-1 text-xs disabled:opacity-40 hover:bg-slate-50"
+            >
+              Next →
+            </button>
           </div>
         )}
-        <div className="mt-4 space-y-1">
-          {images.map((img, i) => (
-            <button
-              key={i}
-              onClick={() => setCurrent(i)}
-              className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs transition ${
-                i === current ? "bg-indigo-50 text-indigo-700" : "text-slate-500 hover:bg-slate-50"
-              }`}
-            >
-              <span className="text-base">📎</span>
-              <span className="truncate">{img}</span>
-            </button>
-          ))}
-        </div>
       </div>
     </div>
   )
