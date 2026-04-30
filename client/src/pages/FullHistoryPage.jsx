@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { fetchInventoryEntries, fetchProducts } from "../api/inventoryApi"
+import { fetchInventoryEntries, fetchProducts, deleteInventoryEntry } from "../api/inventoryApi"
 
 const formatDate = (value) => {
   const date = new Date(value)
@@ -112,6 +112,22 @@ function FullHistoryPage() {
     limit: 25,
   })
   const [lightboxImages, setLightboxImages] = useState(null)
+  const [deletingId, setDeletingId] = useState(null)
+  const [confirmId, setConfirmId] = useState(null)
+
+  const handleDelete = async (id) => {
+    setDeletingId(id)
+    try {
+      await deleteInventoryEntry(id)
+      setEntries((prev) => prev.filter((e) => e.id !== id))
+      setMeta((prev) => ({ ...prev, total: prev.total - 1 }))
+    } catch (err) {
+      alert("Failed to delete entry. Please try again.")
+    } finally {
+      setDeletingId(null)
+      setConfirmId(null)
+    }
+  }
 
   useEffect(() => {
     fetchProducts().then(setProducts)
@@ -216,6 +232,7 @@ function FullHistoryPage() {
                   <th className="border-r border-slate-200 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 whitespace-nowrap">To</th>
                   <th className="border-r border-slate-200 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 whitespace-nowrap">Remarks</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 whitespace-nowrap">Images</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 whitespace-nowrap"></th>
                 </tr>
               </thead>
               <tbody>
@@ -266,6 +283,33 @@ function FullHistoryPage() {
                           </button>
                         ) : (
                           <span className="text-slate-300 text-xs">—</span>
+                        )}
+                      </td>
+                      {/* Delete */}
+                      <td className="px-3 py-1.5">
+                        {confirmId === entry.id ? (
+                          <div className="flex items-center gap-1 whitespace-nowrap">
+                            <button
+                              onClick={() => handleDelete(entry.id)}
+                              disabled={deletingId === entry.id}
+                              className="rounded px-2 py-1 text-xs font-semibold bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 transition-colors"
+                            >
+                              {deletingId === entry.id ? "..." : "Yes"}
+                            </button>
+                            <button
+                              onClick={() => setConfirmId(null)}
+                              className="rounded px-2 py-1 text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+                            >
+                              No
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmId(entry.id)}
+                            className="rounded px-2 py-1 text-xs font-medium text-rose-500 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-colors"
+                          >
+                            Delete
+                          </button>
                         )}
                       </td>
                     </tr>

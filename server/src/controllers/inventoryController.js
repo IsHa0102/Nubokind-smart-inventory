@@ -160,4 +160,62 @@ const createInventoryEntry = async (req, res, next) => {
   }
 }
 
-module.exports = { getInventoryEntries, createInventoryEntry }
+const deleteInventoryEntry = async (req, res, next) => {
+  try {
+    const { id } = req.params
+
+    // Fetch the entry first to get images and reverse the stock change
+    const entryResult = await pool.query(
+      "SELECT * FROM inventory_entries WHERE id = $1",
+      [id]
+    )
+    if (!entryResult.rows.length) {
+      return res.status(404).json({ message: "Entry not found." })
+    }
+
+    const entry = entryResult.rows[0]
+    const client = await pool.connect()
+    try {
+      await client.query("BEGIN")
+
+      // Reverse the stock change caused by this entry
+      const productResult = await client.query(
+        "SELECT stock FROM products WHERE id = $1 FOR UPDATE",
+        [entry.product_id]
+      )
+      if (productResult.rows.length) {
+        let reversedStock = Number(productResult.rows[0].stock)
+        const qty = Number(entry.quantity)
+        if (entry.type === "add") reversedStock -= qty
+        if (entry.type === "remove") reversedStock += qty
+        // For "adjustment" we can't reliably reverse — skip stock change
+        if (entry.type !== "adjustment") {
+          await client.query(
+            "UPDATE products SET stock = $1 WHERE id = $2",
+            [Math.max(0, reversedStock), entry.product_id]
+          )
+        }
+      }
+
+      await client.query("DELETE FROM inventory_entries WHERE id = $1", [id])
+      await client.query("COMMIT")
+
+      // Delete images from Supabase Storage (best effort, don't fail if missing)
+      if (entry.images?.length) {
+        const filenames = entry.images.map((url) => url.split("/").pop())
+        await supabase.storage.from(BUCKET).remove(filenames)
+      }
+
+      return res.status(204).send()
+    } catch (err) {
+      await client.query("ROLLBACK")
+      throw err
+    } finally {
+      client.release()
+    }
+  } catch (err) {
+    next(err)
+  }
+}
+
+module.exports = { getInventoryEntries, createInventoryEntry, deleteInventoryEntry }

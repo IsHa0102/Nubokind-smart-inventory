@@ -83,3 +83,7 @@ export const fetchRecentInventoryEntries = async (limit = 7) => {
   const data = await fetchInventoryEntries({ page: 1, limit })
   return data
 }
+
+export const deleteInventoryEntry = async (id) => {
+  await apiClient.delete(`/inventory-entries/${id}`)
+}
