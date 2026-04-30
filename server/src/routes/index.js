@@ -15,7 +15,7 @@ const {
   updateDestination,
   deleteDestination,
 } = require("../controllers/adminController")
-const { getInventoryEntries, createInventoryEntry } = require("../controllers/inventoryController")
+const { getInventoryEntries, createInventoryEntry, deleteInventoryEntry } = require("../controllers/inventoryController")
 const { fetchDashboardStats, fetchStockMovement } = require("../controllers/dashboardController")
 const upload = require("../middleware/upload")
 
@@ -37,6 +37,7 @@ router.delete("/destinations/:id", deleteDestination)
 
 router.get("/inventory-entries", getInventoryEntries)
 router.post("/inventory-entries", upload.array("images", 3), createInventoryEntry)
+router.delete("/inventory-entries/:id", deleteInventoryEntry)
 
 router.get("/dashboard/stats", fetchDashboardStats)
 router.get("/dashboard/stock-movement", fetchStockMovement)
