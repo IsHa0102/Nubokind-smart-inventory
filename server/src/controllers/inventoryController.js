@@ -1,4 +1,26 @@
 const pool = require("../config/db")
+const supabase = require("../config/supabase")
+const { v4: uuidv4 } = require("crypto").randomUUID ? { v4: () => require("crypto").randomUUID() } : require("crypto")
+
+const BUCKET = "inventory-images"
+
+// Upload a single file buffer to Supabase Storage, return public URL
+async function uploadToSupabase(file) {
+  const ext = file.originalname.split(".").pop()
+  const filename = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+
+  const { error } = await supabase.storage
+    .from(BUCKET)
+    .upload(filename, file.buffer, {
+      contentType: file.mimetype,
+      upsert: false,
+    })
+
+  if (error) throw new Error(`Supabase upload failed: ${error.message}`)
+
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(filename)
+  return data.publicUrl
+}
 
 const getInventoryEntries = async (req, res, next) => {
   try {
@@ -72,8 +94,6 @@ const getInventoryEntries = async (req, res, next) => {
 const createInventoryEntry = async (req, res, next) => {
   try {
     const { product_id, type, quantity, source, destination, remarks } = req.body
-    // Store the served filename (disk storage gives file.filename)
-    const images = (req.files || []).map((file) => file.filename)
 
     if (!product_id || !type || !quantity) {
       return res.status(400).json({ message: "product_id, type and quantity are required." })
@@ -88,9 +108,17 @@ const createInventoryEntry = async (req, res, next) => {
       return res.status(400).json({ message: "destination is required for remove." })
     }
 
+    // Upload all images to Supabase Storage, collect public URLs
+    const imageUrls = []
+    for (const file of req.files || []) {
+      const url = await uploadToSupabase(file)
+      imageUrls.push(url)
+    }
+
     const client = await pool.connect()
     try {
       await client.query("BEGIN")
+
       const productResult = await client.query(
         "SELECT stock FROM products WHERE id = $1 FOR UPDATE",
         [product_id]
@@ -106,14 +134,17 @@ const createInventoryEntry = async (req, res, next) => {
       if (type === "remove") nextStock -= qty
       if (type === "adjustment") nextStock = qty
 
-      await client.query("UPDATE products SET stock = $1 WHERE id = $2", [nextStock, product_id])
+      await client.query(
+        "UPDATE products SET stock = $1 WHERE id = $2",
+        [nextStock, product_id]
+      )
 
       const entryResult = await client.query(
         `INSERT INTO inventory_entries
          (product_id, type, quantity, source, destination, remarks, images)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING *`,
-        [product_id, type, qty, source || null, destination || null, remarks || null, images]
+        [product_id, type, qty, source || null, destination || null, remarks || null, imageUrls]
       )
 
       await client.query("COMMIT")

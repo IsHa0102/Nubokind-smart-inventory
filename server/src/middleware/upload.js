@@ -1,21 +1,7 @@
 const multer = require("multer")
-const path = require("path")
-const fs = require("fs")
 
-// Save uploads to disk so they can be served as static files
-const uploadDir = path.join(__dirname, "../../uploads")
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true })
-}
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadDir),
-  filename: (_req, file, cb) => {
-    // Unique filename: timestamp + original name (sanitised)
-    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_")
-    cb(null, `${Date.now()}_${safeName}`)
-  },
-})
+// Keep files in memory as Buffer — we'll stream them to Supabase Storage
+const storage = multer.memoryStorage()
 
 const upload = multer({
   storage,

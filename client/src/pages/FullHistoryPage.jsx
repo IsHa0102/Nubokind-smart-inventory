@@ -18,14 +18,7 @@ const getSignedQuantity = (entry) => {
   return `=${entry.quantity}`
 }
 
-const API_ORIGIN = (import.meta.env.VITE_API_BASE_URL || "http://localhost:4000/api")
-  .replace(/\/api\/?$/, "")
-
-function getImageUrl(filename) {
-  return `${API_ORIGIN}/uploads/${filename}`
-}
-
-// Lightbox to view uploaded images directly from the server
+// Images are full Supabase public URLs — just render them directly
 function ImageModal({ images, onClose }) {
   const [current, setCurrent] = useState(0)
   const [errored, setErrored] = useState({})
@@ -57,53 +50,49 @@ function ImageModal({ images, onClose }) {
           {errored[current] ? (
             <div className="text-center text-slate-400 p-8">
               <div className="text-4xl mb-2">🖼️</div>
-              <p className="text-xs">{images[current]}</p>
               <p className="text-xs mt-1 text-slate-500">Could not load image</p>
             </div>
           ) : (
             <img
               key={current}
-              src={getImageUrl(images[current])}
-              alt={images[current]}
+              src={images[current]}
+              alt={`Image ${current + 1}`}
               className="max-h-[60vh] max-w-full object-contain"
               onError={() => setErrored((prev) => ({ ...prev, [current]: true }))}
             />
           )}
         </div>
 
-        {/* Navigation + filename */}
-        <div className="border-t border-slate-100 px-5 py-3">
-          <p className="mb-2 truncate text-xs text-slate-500">{images[current]}</p>
-          {images.length > 1 && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCurrent((c) => Math.max(0, c - 1))}
-                disabled={current === 0}
-                className="rounded-lg border border-slate-200 px-3 py-1 text-xs disabled:opacity-40 hover:bg-slate-50"
-              >
-                ← Prev
-              </button>
-              <div className="flex flex-1 justify-center gap-1">
-                {images.map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setCurrent(i)}
-                    className={`h-2 w-2 rounded-full transition ${
-                      i === current ? "bg-indigo-500" : "bg-slate-300 hover:bg-slate-400"
-                    }`}
-                  />
-                ))}
-              </div>
-              <button
-                onClick={() => setCurrent((c) => Math.min(images.length - 1, c + 1))}
-                disabled={current === images.length - 1}
-                className="rounded-lg border border-slate-200 px-3 py-1 text-xs disabled:opacity-40 hover:bg-slate-50"
-              >
-                Next →
-              </button>
+        {/* Navigation */}
+        {images.length > 1 && (
+          <div className="border-t border-slate-100 px-5 py-3 flex items-center gap-2">
+            <button
+              onClick={() => setCurrent((c) => Math.max(0, c - 1))}
+              disabled={current === 0}
+              className="rounded-lg border border-slate-200 px-3 py-1 text-xs disabled:opacity-40 hover:bg-slate-50"
+            >
+              ← Prev
+            </button>
+            <div className="flex flex-1 justify-center gap-1">
+              {images.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setCurrent(i)}
+                  className={`h-2 w-2 rounded-full transition ${
+                    i === current ? "bg-indigo-500" : "bg-slate-300 hover:bg-slate-400"
+                  }`}
+                />
+              ))}
             </div>
-          )}
-        </div>
+            <button
+              onClick={() => setCurrent((c) => Math.min(images.length - 1, c + 1))}
+              disabled={current === images.length - 1}
+              className="rounded-lg border border-slate-200 px-3 py-1 text-xs disabled:opacity-40 hover:bg-slate-50"
+            >
+              Next →
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
