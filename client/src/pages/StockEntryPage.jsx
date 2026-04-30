@@ -217,7 +217,7 @@ function StockEntryPage() {
                   <button
                     type="button"
                     onClick={() => removeImage(index)}
-                    className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow-lg transition hover:bg-red-600 opacity-0 group-hover:opacity-100"
+                    className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow-lg transition hover:bg-red-600 opacity-100 md:opacity-0 md:group-hover:opacity-100"
                   >
                     <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
