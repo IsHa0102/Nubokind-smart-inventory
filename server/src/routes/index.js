@@ -15,8 +15,10 @@ const {
   updateDestination,
   deleteDestination,
 } = require("../controllers/adminController")
-const { getInventoryEntries, createInventoryEntry, deleteInventoryEntry } = require("../controllers/inventoryController")
+const { getInventoryEntries, createInventoryEntry, deleteInventoryEntry, bulkRemoveInventory } = require("../controllers/inventoryController")
 const { fetchDashboardStats, fetchStockMovement } = require("../controllers/dashboardController")
+const { verifyAdminPassword } = require("../controllers/authController")
+const { getReportStats } = require("../controllers/reportsController")
 const upload = require("../middleware/upload")
 
 const router = express.Router()
@@ -37,9 +39,13 @@ router.delete("/destinations/:id", deleteDestination)
 
 router.get("/inventory-entries", getInventoryEntries)
 router.post("/inventory-entries", upload.array("images", 3), createInventoryEntry)
+router.post("/inventory-entries/bulk-remove", upload.array("images", 3), bulkRemoveInventory)
 router.delete("/inventory-entries/:id", deleteInventoryEntry)
 
 router.get("/dashboard/stats", fetchDashboardStats)
 router.get("/dashboard/stock-movement", fetchStockMovement)
+
+router.post("/auth/admin", verifyAdminPassword)
+router.get("/reports/stats", getReportStats)
 
 module.exports = router

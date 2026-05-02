@@ -87,3 +87,25 @@ export const fetchRecentInventoryEntries = async (limit = 7) => {
 export const deleteInventoryEntry = async (id) => {
   await apiClient.delete(`/inventory-entries/${id}`)
 }
+
+export const bulkRemoveInventory = async ({ deductions, destination, remarks, images = [], entry_date }) => {
+  if (images.length > 0) {
+    const formData = new FormData()
+    formData.append("deductions", JSON.stringify(deductions))
+    formData.append("destination", destination)
+    if (remarks) formData.append("remarks", remarks)
+    if (entry_date) formData.append("entry_date", entry_date)
+    images.forEach((img) => formData.append("images", img))
+    const { data } = await apiClient.post("/inventory-entries/bulk-remove", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    })
+    return data
+  }
+  const { data } = await apiClient.post("/inventory-entries/bulk-remove", { deductions, destination, remarks, entry_date })
+  return data
+}
+
+export const fetchReportStats = async (params = {}) => {
+  const { data } = await apiClient.get("/reports/stats", { params })
+  return data
+}
