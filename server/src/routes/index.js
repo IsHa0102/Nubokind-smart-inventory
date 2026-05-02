@@ -15,7 +15,7 @@ const {
   updateDestination,
   deleteDestination,
 } = require("../controllers/adminController")
-const { getInventoryEntries, createInventoryEntry, deleteInventoryEntry, bulkRemoveInventory } = require("../controllers/inventoryController")
+const { getInventoryEntries, createInventoryEntry, deleteInventoryEntry, bulkRemoveInventory, bulkAddInventory } = require("../controllers/inventoryController")
 const { fetchDashboardStats, fetchStockMovement } = require("../controllers/dashboardController")
 const { verifyAdminPassword } = require("../controllers/authController")
 const { getReportStats } = require("../controllers/reportsController")
@@ -40,6 +40,7 @@ router.delete("/destinations/:id", deleteDestination)
 router.get("/inventory-entries", getInventoryEntries)
 router.post("/inventory-entries", upload.array("images", 3), createInventoryEntry)
 router.post("/inventory-entries/bulk-remove", upload.array("images", 3), bulkRemoveInventory)
+router.post("/inventory-entries/bulk-add", upload.array("images", 3), bulkAddInventory)
 router.delete("/inventory-entries/:id", deleteInventoryEntry)
 
 router.get("/dashboard/stats", fetchDashboardStats)

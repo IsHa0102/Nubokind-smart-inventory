@@ -301,4 +301,76 @@ const bulkRemoveInventory = async (req, res, next) => {
   }
 }
 
-module.exports = { getInventoryEntries, createInventoryEntry, deleteInventoryEntry, bulkRemoveInventory }
+// Bulk add: adds multiple items in one transaction (used by corrugation box flow)
+// Body: { additions: [{name, quantity}], source, remarks, entry_date }
+const bulkAddInventory = async (req, res, next) => {
+  try {
+    let additions = req.body.additions
+    if (typeof additions === "string") {
+      try { additions = JSON.parse(additions) } catch { additions = [] }
+    }
+    const { source, remarks, entry_date } = req.body
+
+    if (!additions?.length) {
+      return res.status(400).json({ message: "additions array is required." })
+    }
+    if (!source) {
+      return res.status(400).json({ message: "source is required." })
+    }
+
+    // Upload images to Supabase if present
+    const imageUrls = []
+    for (const file of req.files || []) {
+      const url = await uploadToSupabase(file)
+      imageUrls.push(url)
+    }
+
+    const client = await pool.connect()
+    try {
+      await client.query("BEGIN")
+      const results = []
+
+      for (let i = 0; i < additions.length; i++) {
+        const { name, quantity } = additions[i]
+        const qty = Number(quantity)
+
+        const productResult = await client.query(
+          "SELECT id, stock FROM products WHERE LOWER(name) = LOWER($1) FOR UPDATE",
+          [name]
+        )
+        if (!productResult.rows.length) {
+          await client.query("ROLLBACK")
+          return res.status(404).json({ message: `Item not found: ${name}` })
+        }
+
+        const product = productResult.rows[0]
+        const newStock = Number(product.stock) + qty
+
+        await client.query("UPDATE products SET stock = $1 WHERE id = $2", [newStock, product.id])
+
+        const entryImages = i === 0 ? imageUrls : []
+        const entry = await client.query(
+          `INSERT INTO inventory_entries
+           (product_id, type, quantity, source, remarks, images, created_at)
+           VALUES ($1, 'add', $2, $3, $4, $5, $6)
+           RETURNING *`,
+          [product.id, qty, source, remarks || null, entryImages,
+           entry_date ? new Date(entry_date).toISOString() : new Date().toISOString()]
+        )
+        results.push(entry.rows[0])
+      }
+
+      await client.query("COMMIT")
+      return res.status(201).json({ entries: results })
+    } catch (err) {
+      await client.query("ROLLBACK")
+      throw err
+    } finally {
+      client.release()
+    }
+  } catch (err) {
+    next(err)
+  }
+}
+
+module.exports = { getInventoryEntries, createInventoryEntry, deleteInventoryEntry, bulkRemoveInventory, bulkAddInventory }

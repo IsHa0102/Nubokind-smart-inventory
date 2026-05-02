@@ -109,3 +109,20 @@ export const fetchReportStats = async (params = {}) => {
   const { data } = await apiClient.get("/reports/stats", { params })
   return data
 }
+
+export const bulkAddInventory = async ({ additions, source, remarks, images = [], entry_date }) => {
+  if (images.length > 0) {
+    const formData = new FormData()
+    formData.append("additions", JSON.stringify(additions))
+    formData.append("source", source)
+    if (remarks) formData.append("remarks", remarks)
+    if (entry_date) formData.append("entry_date", entry_date)
+    images.forEach((img) => formData.append("images", img))
+    const { data } = await apiClient.post("/inventory-entries/bulk-add", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    })
+    return data
+  }
+  const { data } = await apiClient.post("/inventory-entries/bulk-add", { additions, source, remarks, entry_date })
+  return data
+}

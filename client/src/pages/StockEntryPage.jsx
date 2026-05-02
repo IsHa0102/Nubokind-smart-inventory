@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import {
+  bulkAddInventory,
   bulkRemoveInventory,
   createInventoryEntry,
   fetchDestinations,
@@ -48,7 +49,275 @@ const PRODUCT_CATALOGUE = [
   },
 ]
 
-// ── Remove deduction rules ─────────────────────────────────────────────────
+// ── Corrugation box (ADD only) ─────────────────────────────────────────────
+const CORRUGATION_BOX = {
+  key: "corrugation",
+  label: "Corrugation Box (Transport Box)",
+  image: "https://res.cloudinary.com/dgqcdiyad/image/upload/f_auto,q_auto/corrugation_box_ph3v1n",
+}
+
+const CORRUGATION_PRODUCTS = [
+  { key: "newborn", label: "Newborn Gift Kit (Sensory Kit)",   unitsPerBox: 28 },
+  { key: "cloth",   label: "Cloth Book Set",                   unitsPerBox: 28 },
+  { key: "kiko",    label: "Kiko No Drop Teether",             unitsPerBox: 115 },
+  { key: "ele",     label: "Ele Ring Silicone Teether Set",    unitsPerBox: 200 },
+]
+
+// Items each corrugation product expands into (for add flow)
+const CORRUGATION_ITEM_MAP = {
+  newborn: [
+    { name: "Flashcards",              multiplier: 10 },
+    { name: "Ribbon",                  multiplier: 1 },
+    { name: "Cloth Book",              multiplier: 1 },
+    { name: "Banner",                  multiplier: 1 },
+    { name: "Blue Box",                multiplier: 1 },
+    { name: "Gift Kit Sleeve",         multiplier: 1 },
+    { name: "Gift Kit Thank You Card", multiplier: 1 },
+  ],
+  cloth: [
+    { name: "My First Patterns Book",    multiplier: 1 },
+    { name: "My First Faces Book",       multiplier: 1 },
+    { name: "My First Puzzles Book",     multiplier: 1 },
+    { name: "Blue Box",                  multiplier: 1 },
+    { name: "Book Kit Sleeve",           multiplier: 1 },
+    { name: "Book Kit Thank You Card",   multiplier: 1 },
+  ],
+  kiko: [
+    { name: "Sage Green Kiko Teether",  multiplier: 1 },
+    { name: "Cloud White Kiko Teether", multiplier: 1 },
+    { name: "Kiko Box",                 multiplier: 1 },
+    { name: "Thank You Card",           multiplier: 1 },
+    { name: "Potli",                    multiplier: 1 },
+  ],
+  ele: [
+    { name: "Sage Green Teether",   multiplier: 1 },
+    { name: "Aqua Blue Teether",    multiplier: 1 },
+    { name: "Slate Grey Teether",   multiplier: 1 },
+    { name: "Oat Beige Teether",    multiplier: 1 },
+    { name: "Baby Pink Teether",    multiplier: 1 },
+    { name: "Ele Box",              multiplier: 1 },
+    { name: "Ele Thank You Card",   multiplier: 1 },
+    { name: "Potli",                multiplier: 1 },
+  ],
+}
+
+function buildCorrugationAdditions(productKey, boxes) {
+  const Q = Number(boxes)
+  const cp = CORRUGATION_PRODUCTS.find((p) => p.key === productKey)
+  const items = CORRUGATION_ITEM_MAP[productKey]
+  if (!cp || !items) return []
+  const totalUnits = cp.unitsPerBox * Q
+  return items.map((item) => ({
+    name: item.name,
+    quantity: totalUnits * item.multiplier,
+  }))
+}
+
+// ── Corrugation flow component (ADD only) ──────────────────────────────────
+function CorrugationFlow({ manufacturers }) {
+  const today = new Date().toISOString().split("T")[0]
+  const [selectedProduct, setSelectedProduct] = useState(null)
+  const [boxes, setBoxes] = useState("")
+  const [source, setSource] = useState("")
+  const [remarks, setRemarks] = useState("")
+  const [entryDate, setEntryDate] = useState(today)
+  const [images, setImages] = useState([])
+  const [imagePreviews, setImagePreviews] = useState([])
+  const [fileInputKey, setFileInputKey] = useState(0)
+  const [message, setMessage] = useState("")
+  const [submitting, setSubmitting] = useState(false)
+
+  const cp = CORRUGATION_PRODUCTS.find((p) => p.key === selectedProduct)
+
+  const totalUnits = useMemo(() => {
+    if (!cp || !boxes || Number(boxes) <= 0) return 0
+    return cp.unitsPerBox * Number(boxes)
+  }, [cp, boxes])
+
+  const additions = useMemo(() => {
+    if (!selectedProduct || !boxes || Number(boxes) <= 0) return []
+    return buildCorrugationAdditions(selectedProduct, boxes)
+  }, [selectedProduct, boxes])
+
+  const onFileChange = (e) => {
+    const incoming = Array.from(e.target.files || [])
+    const combined = [...images, ...incoming].slice(0, 3)
+    imagePreviews.forEach((u) => URL.revokeObjectURL(u))
+    setImages(combined)
+    setImagePreviews(combined.map((f) => URL.createObjectURL(f)))
+    setFileInputKey((k) => k + 1)
+  }
+
+  const removeImg = (i) => {
+    URL.revokeObjectURL(imagePreviews[i])
+    setImages((p) => p.filter((_, idx) => idx !== i))
+    setImagePreviews((p) => p.filter((_, idx) => idx !== i))
+    setFileInputKey((k) => k + 1)
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!selectedProduct) { setMessage("Please select a product."); return }
+    if (!boxes || Number(boxes) <= 0) { setMessage("Please enter a valid number of boxes."); return }
+    if (!source) { setMessage("Please select a source."); return }
+
+    setSubmitting(true)
+    setMessage("")
+    try {
+      await bulkAddInventory({ additions, source, remarks, images, entry_date: entryDate })
+      setMessage("✓ Stock added successfully.")
+      setSelectedProduct(null)
+      setBoxes("")
+      setSource("")
+      setRemarks("")
+      setEntryDate(today)
+      imagePreviews.forEach((u) => URL.revokeObjectURL(u))
+      setImages([])
+      setImagePreviews([])
+      setFileInputKey((k) => k + 1)
+    } catch (err) {
+      setMessage(err?.response?.data?.message || "Failed to add stock. Please try again.")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="grid gap-6">
+      {/* Product selection */}
+      <div className="grid gap-3">
+        <p className="text-sm font-semibold text-slate-700">Step 2 — Select product *</p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {CORRUGATION_PRODUCTS.map((p) => (
+            <button
+              key={p.key}
+              type="button"
+              onClick={() => { setSelectedProduct(p.key); setBoxes(""); setMessage("") }}
+              className={`flex flex-col items-center gap-1.5 rounded-xl border-2 p-3 text-center transition-all focus:outline-none ${
+                selectedProduct === p.key
+                  ? "border-emerald-500 bg-emerald-50 shadow-md"
+                  : "border-slate-200 bg-white hover:border-emerald-300 hover:bg-slate-50"
+              }`}
+            >
+              <p className={`text-xs font-medium leading-tight ${selectedProduct === p.key ? "text-emerald-700" : "text-slate-700"}`}>
+                {p.label}
+              </p>
+              <p className={`text-[10px] font-semibold ${selectedProduct === p.key ? "text-emerald-500" : "text-slate-400"}`}>
+                {p.unitsPerBox} units/box
+              </p>
+              {selectedProduct === p.key && (
+                <span className="mt-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white text-[10px] font-bold">✓</span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {selectedProduct && (
+        <>
+          <div className="h-px bg-slate-100" />
+          <div className="grid gap-4">
+            <p className="text-sm font-semibold text-slate-700">Step 3 — Details</p>
+
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Number of corrugated boxes received *
+              <input
+                type="number"
+                min="1"
+                value={boxes}
+                onChange={(e) => setBoxes(e.target.value)}
+                className="rounded-lg border border-slate-300 px-3 py-2"
+                placeholder="e.g. 3"
+              />
+            </label>
+
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              From (Source) *
+              <select value={source} onChange={(e) => setSource(e.target.value)}
+                className="rounded-lg border border-slate-300 px-3 py-2">
+                <option value="">Select source</option>
+                {manufacturers.map((m) => (
+                  <option key={m.id} value={m.name}>{m.name}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Remarks
+              <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)}
+                rows="2" className="rounded-lg border border-slate-300 px-3 py-2" />
+            </label>
+
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Date *
+              <input type="date" value={entryDate} max={today}
+                onChange={(e) => setEntryDate(e.target.value)}
+                className="rounded-lg border border-slate-300 px-3 py-2" />
+            </label>
+
+            {/* Images */}
+            <div className="grid gap-2">
+              <p className="text-sm font-medium text-slate-700">
+                Images (max 3){images.length > 0 && <span className="font-normal text-slate-400"> — {images.length} selected</span>}
+              </p>
+              {images.length < 3 && (
+                <input key={fileInputKey} type="file" accept="image/*" multiple onChange={onFileChange}
+                  className="rounded-lg border border-slate-300 p-2 text-sm" />
+              )}
+              {imagePreviews.length > 0 && (
+                <div className="mt-1 grid grid-cols-3 gap-2">
+                  {imagePreviews.map((preview, idx) => (
+                    <div key={idx} className="relative group">
+                      <img src={preview} alt="" className="h-20 w-full rounded-lg object-cover border border-slate-200" />
+                      <button type="button" onClick={() => removeImg(idx)}
+                        className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition">
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                      <span className="absolute bottom-1 left-1 rounded bg-black/40 px-1 text-[10px] text-white">{idx + 1}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Preview */}
+          {additions.length > 0 && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+              <p className="mb-1 text-sm font-semibold text-emerald-800">
+                This will add — {Number(boxes)} box{Number(boxes) !== 1 ? "es" : ""} × {cp?.unitsPerBox} = <span className="text-emerald-700">{totalUnits} units</span>
+              </p>
+              <div className="mt-2 grid gap-1">
+                {additions.map((a, i) => (
+                  <div key={i} className="flex items-center justify-between text-sm">
+                    <span className="text-slate-700">{a.name}</span>
+                    <span className="font-semibold text-emerald-600">+{a.quantity}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {message && (
+        <p className={`text-sm font-medium ${message.startsWith("✓") ? "text-emerald-600" : "text-rose-600"}`}>
+          {message}
+        </p>
+      )}
+
+      <button type="submit"
+        disabled={submitting || additions.length === 0 || !source}
+        className="w-full rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed sm:w-fit transition-colors">
+        {submitting ? "Adding..." : "Confirm Add"}
+      </button>
+    </form>
+  )
+}
+
+
 const REMOVE_PRODUCTS = [
   {
     key: "ele",
@@ -449,6 +718,8 @@ function StockEntryPage() {
     setMessage("")
   }
 
+  const isCorrugation = form.type === "add" && selectedCatalogueKey === "corrugation"
+
   const typeFields = useMemo(() => {
     if (form.type === "add") return "source"
     if (form.type === "remove") return "destination"
@@ -579,10 +850,27 @@ function StockEntryPage() {
                     onSelect={handleCatalogueSelect}
                   />
                 ))}
+                {/* Corrugation box — ADD only */}
+                {form.type === "add" && (
+                  <ProductCard
+                    item={CORRUGATION_BOX}
+                    selected={selectedCatalogueKey === "corrugation"}
+                    onSelect={handleCatalogueSelect}
+                  />
+                )}
               </div>
             </div>
 
-            {selectedCatalogueKey && (
+            {/* Corrugation flow */}
+            {isCorrugation && (
+              <>
+                <div className="h-px bg-slate-100" />
+                <CorrugationFlow manufacturers={manufacturers} />
+              </>
+            )}
+
+            {/* Regular item form — hidden when corrugation selected */}
+            {selectedCatalogueKey && !isCorrugation && (
               <>
                 <div className="h-px bg-slate-100" />
                 <div className="grid gap-4">
@@ -693,10 +981,12 @@ function StockEntryPage() {
               </p>
             )}
 
-            <button type="submit" disabled={!selectedCatalogueKey}
-              className="w-full rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed sm:w-fit transition-colors">
-              Save Entry
-            </button>
+            {!isCorrugation && (
+              <button type="submit" disabled={!selectedCatalogueKey}
+                className="w-full rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed sm:w-fit transition-colors">
+                Save Entry
+              </button>
+            )}
           </form>
         )}
       </div>
