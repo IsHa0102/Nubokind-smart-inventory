@@ -93,7 +93,7 @@ const getInventoryEntries = async (req, res, next) => {
 
 const createInventoryEntry = async (req, res, next) => {
   try {
-    const { product_id, type, quantity, source, destination, remarks } = req.body
+    const { product_id, type, quantity, source, destination, remarks, entry_date } = req.body
 
     if (!product_id || !type || !quantity) {
       return res.status(400).json({ message: "product_id, type and quantity are required." })
@@ -141,10 +141,11 @@ const createInventoryEntry = async (req, res, next) => {
 
       const entryResult = await client.query(
         `INSERT INTO inventory_entries
-         (product_id, type, quantity, source, destination, remarks, images)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         (product_id, type, quantity, source, destination, remarks, images, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *`,
-        [product_id, type, qty, source || null, destination || null, remarks || null, imageUrls]
+        [product_id, type, qty, source || null, destination || null, remarks || null, imageUrls,
+         entry_date ? new Date(entry_date).toISOString() : new Date().toISOString()]
       )
 
       await client.query("COMMIT")
@@ -218,4 +219,86 @@ const deleteInventoryEntry = async (req, res, next) => {
   }
 }
 
-module.exports = { getInventoryEntries, createInventoryEntry, deleteInventoryEntry }
+// Bulk remove: deducts multiple items in one transaction
+// Body: { deductions: [{name, quantity}], destination, remarks }
+const bulkRemoveInventory = async (req, res, next) => {
+  try {
+    // deductions may come as JSON string (FormData) or parsed object (JSON body)
+    let deductions = req.body.deductions
+    if (typeof deductions === "string") {
+      try { deductions = JSON.parse(deductions) } catch { deductions = [] }
+    }
+    const { destination, remarks, entry_date } = req.body
+
+    if (!deductions?.length) {
+      return res.status(400).json({ message: "deductions array is required." })
+    }
+    if (!destination) {
+      return res.status(400).json({ message: "destination is required." })
+    }
+
+    // Upload images to Supabase if present
+    const imageUrls = []
+    for (const file of req.files || []) {
+      const url = await uploadToSupabase(file)
+      imageUrls.push(url)
+    }
+
+    const client = await pool.connect()
+    try {
+      await client.query("BEGIN")
+
+      const results = []
+      for (let i = 0; i < deductions.length; i++) {
+        const { name, quantity } = deductions[i]
+        const qty = Number(quantity)
+
+        const productResult = await client.query(
+          "SELECT id, stock FROM products WHERE LOWER(name) = LOWER($1) FOR UPDATE",
+          [name]
+        )
+        if (!productResult.rows.length) {
+          await client.query("ROLLBACK")
+          return res.status(404).json({ message: `Item not found: ${name}` })
+        }
+
+        const product = productResult.rows[0]
+        const newStock = Number(product.stock) - qty
+
+        if (newStock < 0) {
+          await client.query("ROLLBACK")
+          return res.status(400).json({
+            message: `Insufficient stock for "${name}". Available: ${product.stock}, Required: ${qty}`,
+          })
+        }
+
+        await client.query("UPDATE products SET stock = $1 WHERE id = $2", [newStock, product.id])
+
+        // Attach images only to the first entry
+        const entryImages = i === 0 ? imageUrls : []
+
+        const entry = await client.query(
+          `INSERT INTO inventory_entries
+           (product_id, type, quantity, destination, remarks, images, created_at)
+           VALUES ($1, 'remove', $2, $3, $4, $5, $6)
+           RETURNING *`,
+          [product.id, qty, destination, remarks || null, entryImages,
+           entry_date ? new Date(entry_date).toISOString() : new Date().toISOString()]
+        )
+        results.push(entry.rows[0])
+      }
+
+      await client.query("COMMIT")
+      return res.status(201).json({ entries: results })
+    } catch (err) {
+      await client.query("ROLLBACK")
+      throw err
+    } finally {
+      client.release()
+    }
+  } catch (err) {
+    next(err)
+  }
+}
+
+module.exports = { getInventoryEntries, createInventoryEntry, deleteInventoryEntry, bulkRemoveInventory }

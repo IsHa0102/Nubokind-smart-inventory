@@ -1,19 +1,78 @@
 import { useEffect, useState } from "react"
 import { fetchDestinations, fetchManufacturers, fetchProducts } from "../api/inventoryApi"
+import { apiClient } from "../api/apiClient"
 import DestinationList from "../components/DestinationList"
 import ManufacturerList from "../components/ManufacturerList"
 import ProductList from "../components/ProductList"
 import { ToastContainer, useToasts } from "../components/Toast"
 
-function AdminPage() {
+// ── Auth gate ──────────────────────────────────────────────────────────────
+function AdminLogin({ onSuccess }) {
+  const [password, setPassword] = useState("")
+  const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setError("")
+    setLoading(true)
+    try {
+      const { data } = await apiClient.post("/auth/admin", { password })
+      if (data.success) {
+        localStorage.setItem("isAdminAuthenticated", "true")
+        onSuccess()
+      }
+    } catch (err) {
+      setError(err?.response?.data?.message || "Incorrect password.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="flex min-h-[60vh] items-center justify-center">
+      <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-8 shadow-lg">
+        <div className="mb-6 text-center">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100">
+            <svg className="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-slate-900">Admin Access</h2>
+          <p className="mt-1 text-sm text-slate-500">Enter the admin password to continue</p>
+        </div>
+        <form onSubmit={handleSubmit} className="grid gap-4">
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            autoFocus
+          />
+          {error && <p className="text-sm text-rose-600">{error}</p>}
+          <button
+            type="submit"
+            disabled={loading || !password}
+            className="w-full rounded-lg bg-indigo-600 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-40 transition-colors"
+          >
+            {loading ? "Verifying..." : "Unlock Admin"}
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// ── Admin page ─────────────────────────────────────────────────────────────
+function AdminContent() {
   const [products, setProducts] = useState([])
   const [manufacturers, setManufacturers] = useState([])
   const [destinations, setDestinations] = useState([])
-
   const [productSearch, setProductSearch] = useState("")
   const [mfrSearch, setMfrSearch] = useState("")
   const [destSearch, setDestSearch] = useState("")
-
   const { toasts, addToast, removeToast } = useToasts()
 
   const loadData = async () => {
@@ -23,65 +82,74 @@ function AdminPage() {
     setDestinations(d)
   }
 
-  useEffect(() => {
-    loadData()
-  }, [])
+  useEffect(() => { loadData() }, [])
+
+  const handleLogout = () => {
+    localStorage.removeItem("isAdminAuthenticated")
+    window.location.reload()
+  }
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-slate-900">Admin</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-slate-900">Admin</h2>
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+        >
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          Logout
+        </button>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* ── Items ── */}
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-lg font-semibold text-slate-900">Items</h3>
             <span className="text-xs font-medium text-slate-500">{products.length} total</span>
           </div>
-          <input
-            placeholder="Search products…"
-            value={productSearch}
-            onChange={(e) => setProductSearch(e.target.value)}
-            className="mb-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-          />
+          <input placeholder="Search products…" value={productSearch} onChange={(e) => setProductSearch(e.target.value)}
+            className="mb-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" />
           <ProductList products={products} onRefresh={loadData} addToast={addToast} search={productSearch} />
         </div>
 
-        {/* ── Manufacturers ── */}
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-lg font-semibold text-slate-900">Manufacturers</h3>
             <span className="text-xs font-medium text-slate-500">{manufacturers.length} total</span>
           </div>
-          <input
-            placeholder="Search manufacturers…"
-            value={mfrSearch}
-            onChange={(e) => setMfrSearch(e.target.value)}
-            className="mb-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-          />
+          <input placeholder="Search manufacturers…" value={mfrSearch} onChange={(e) => setMfrSearch(e.target.value)}
+            className="mb-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" />
           <ManufacturerList manufacturers={manufacturers} onRefresh={loadData} addToast={addToast} search={mfrSearch} />
         </div>
 
-        {/* ── Destinations ── */}
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-lg font-semibold text-slate-900">Destinations</h3>
             <span className="text-xs font-medium text-slate-500">{destinations.length} total</span>
           </div>
-          <input
-            placeholder="Search destinations…"
-            value={destSearch}
-            onChange={(e) => setDestSearch(e.target.value)}
-            className="mb-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-          />
+          <input placeholder="Search destinations…" value={destSearch} onChange={(e) => setDestSearch(e.target.value)}
+            className="mb-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" />
           <DestinationList destinations={destinations} onRefresh={loadData} addToast={addToast} search={destSearch} />
         </div>
       </div>
-
       <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>
   )
 }
 
-export default AdminPage
+function AdminPage() {
+  const [authenticated, setAuthenticated] = useState(
+    () => localStorage.getItem("isAdminAuthenticated") === "true"
+  )
 
+  if (!authenticated) {
+    return <AdminLogin onSuccess={() => setAuthenticated(true)} />
+  }
+  return <AdminContent />
+}
+
+export default AdminPage
