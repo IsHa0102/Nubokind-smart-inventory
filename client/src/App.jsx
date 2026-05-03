@@ -1,6 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import AppLayout from './layout/AppLayout'
-import DashboardPage from './pages/DashboardPage'
 import InventoryPage from './pages/InventoryPage'
 import StockEntryPage from './pages/StockEntryPage'
 import AdminPage from './pages/AdminPage'
@@ -11,8 +10,8 @@ function App() {
   return (
     <Routes>
       <Route path="/" element={<AppLayout />}>
-        <Route index element={<Navigate to="/dashboard" replace />} />
-        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route index element={<Navigate to="/reports" replace />} />
+        <Route path="/dashboard" element={<Navigate to="/reports" replace />} />
         <Route path="/inventory" element={<InventoryPage />} />
         <Route path="/stock-entry" element={<StockEntryPage />} />
         <Route path="/admin" element={<AdminPage />} />
