@@ -221,6 +221,38 @@ const deleteInventoryEntry = async (req, res, next) => {
 
 // Bulk remove: deducts multiple items in one transaction
 // Body: { deductions: [{name, quantity}], destination, remarks }
+// Corrugation box capacity per assembled product
+const CORRUGATION_CAPACITY = {
+  "ele ring silicone teether set": 200,
+  "kiko no drop teether":          115,
+  "cloth book set":                 28,
+  "newborn gift kit":               28,
+}
+
+// Determine which assembled product a deduction list represents
+// by checking if the deductions match a known product's items
+const PRODUCT_KEYS_BY_ITEMS = {
+  ele:     ["sage green teether", "aqua blue teether", "slate grey teether", "oat beige teether", "baby pink teether", "ele box", "ele thank you card", "potli"],
+  kiko:    ["sage green kiko teether", "cloud white kiko teether", "kiko box", "thank you card", "potli"],
+  cloth:   ["my first patterns book", "my first faces book", "my first puzzles book", "blue box", "book kit sleeve", "book kit thank you card"],
+  newborn: ["flashcards", "ribbon", "cloth book", "banner", "blue box", "gift kit sleeve", "gift kit thank you card"],
+}
+
+const PRODUCT_CAPACITY_BY_KEY = {
+  ele:     200,
+  kiko:    115,
+  cloth:   28,
+  newborn: 28,
+}
+
+function detectProductKey(deductions) {
+  const names = deductions.map((d) => d.name.toLowerCase())
+  for (const [key, items] of Object.entries(PRODUCT_KEYS_BY_ITEMS)) {
+    if (items.some((item) => names.includes(item))) return key
+  }
+  return null
+}
+
 const bulkRemoveInventory = async (req, res, next) => {
   try {
     // deductions may come as JSON string (FormData) or parsed object (JSON body)
@@ -235,6 +267,18 @@ const bulkRemoveInventory = async (req, res, next) => {
     }
     if (!destination) {
       return res.status(400).json({ message: "destination is required." })
+    }
+
+    // Auto-calculate corrugation box deduction
+    // Find the quantity being removed (use the first non-packaging item as reference)
+    const productKey = detectProductKey(deductions)
+    let corrugationBoxes = 0
+    if (productKey) {
+      const capacity = PRODUCT_CAPACITY_BY_KEY[productKey]
+      // Find a representative quantity — use the smallest quantity in deductions
+      // (the teether/main product item, not flashcards multiplier)
+      const refQty = Math.min(...deductions.map((d) => d.quantity))
+      corrugationBoxes = Math.ceil(refQty / capacity)
     }
 
     // Upload images to Supabase if present
@@ -286,6 +330,28 @@ const bulkRemoveInventory = async (req, res, next) => {
            entry_date ? new Date(entry_date).toISOString() : new Date().toISOString()]
         )
         results.push(entry.rows[0])
+      }
+
+      // Auto-deduct corrugation boxes (best effort — don't fail the whole removal if boxes are out of stock)
+      if (corrugationBoxes > 0) {
+        const boxResult = await client.query(
+          "SELECT id, stock FROM products WHERE LOWER(name) = 'corrugation box' FOR UPDATE"
+        )
+        if (boxResult.rows.length > 0) {
+          const box = boxResult.rows[0]
+          const newBoxStock = Math.max(0, Number(box.stock) - corrugationBoxes)
+          await client.query("UPDATE products SET stock = $1 WHERE id = $2", [newBoxStock, box.id])
+          const boxEntry = await client.query(
+            `INSERT INTO inventory_entries
+             (product_id, type, quantity, destination, remarks, images, created_at)
+             VALUES ($1, 'remove', $2, $3, $4, '{}', $5)
+             RETURNING *`,
+            [box.id, corrugationBoxes, destination,
+             `Auto-deducted for ${productKey} removal (${remarks || ""})`.trim(),
+             entry_date ? new Date(entry_date).toISOString() : new Date().toISOString()]
+          )
+          results.push(boxEntry.rows[0])
+        }
       }
 
       await client.query("COMMIT")
