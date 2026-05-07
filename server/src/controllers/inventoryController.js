@@ -145,7 +145,7 @@ const createInventoryEntry = async (req, res, next) => {
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *`,
         [product_id, type, qty, source || null, destination || null, remarks || null, imageUrls,
-         entry_date ? new Date(entry_date).toISOString() : new Date().toISOString()]
+         buildTimestamp(entry_date)]
       )
 
       await client.query("COMMIT")
@@ -234,8 +234,8 @@ const CORRUGATION_CAPACITY = {
 const PRODUCT_KEYS_BY_ITEMS = {
   ele:     ["sage green teether", "aqua blue teether", "slate grey teether", "oat beige teether", "baby pink teether", "ele box", "ele thank you card", "potli"],
   kiko:    ["sage green kiko teether", "cloud white kiko teether", "kiko box", "thank you card", "potli"],
-  cloth:   ["my first patterns book", "my first faces book", "my first puzzles book", "blue box", "book kit sleeve", "book kit thank you card"],
-  newborn: ["flashcards", "ribbon", "cloth book", "banner", "blue box", "gift kit sleeve", "gift kit thank you card"],
+  cloth:   ["my first patterns book", "my first faces book", "my first puzzles book", "book kit sleeve", "book kit thank you card"],
+  newborn: ["flashcards", "ribbon", "cloth book", "banner", "gift kit sleeve", "gift kit thank you card"],
 }
 
 const PRODUCT_CAPACITY_BY_KEY = {
@@ -253,35 +253,47 @@ function detectProductKey(deductions) {
   return null
 }
 
+// Get representative quantity (excludes multiplied items like Flashcards)
+function getRefQty(deductions) {
+  const nonMultiplied = deductions.filter(d => d.name.toLowerCase() !== "flashcards")
+  const source = nonMultiplied.length > 0 ? nonMultiplied : deductions
+  return Math.min(...source.map(d => Number(d.quantity)))
+}
+
+// Build the timestamp: use entry_date for date part, but NOW() for time
+function buildTimestamp(entry_date) {
+  if (!entry_date) return new Date().toISOString()
+  // Combine selected date with current time so history shows correct time-of-day
+  const now = new Date()
+  const [y, m, d] = entry_date.split("-")
+  return new Date(Number(y), Number(m) - 1, Number(d),
+    now.getHours(), now.getMinutes(), now.getSeconds()).toISOString()
+}
+
 const bulkRemoveInventory = async (req, res, next) => {
   try {
-    // deductions may come as JSON string (FormData) or parsed object (JSON body)
     let deductions = req.body.deductions
     if (typeof deductions === "string") {
       try { deductions = JSON.parse(deductions) } catch { deductions = [] }
     }
     const { destination, remarks, entry_date } = req.body
 
-    if (!deductions?.length) {
-      return res.status(400).json({ message: "deductions array is required." })
-    }
-    if (!destination) {
-      return res.status(400).json({ message: "destination is required." })
-    }
+    if (!deductions?.length) return res.status(400).json({ message: "deductions array is required." })
+    if (!destination) return res.status(400).json({ message: "destination is required." })
 
-    // Auto-calculate corrugation box deduction
-    // Find the quantity being removed (use the first non-packaging item as reference)
     const productKey = detectProductKey(deductions)
-    let corrugationBoxes = 0
-    if (productKey) {
-      const capacity = PRODUCT_CAPACITY_BY_KEY[productKey]
-      // Find a representative quantity — use the smallest quantity in deductions
-      // (the teether/main product item, not flashcards multiplier)
-      const refQty = Math.min(...deductions.map((d) => d.quantity))
-      corrugationBoxes = Math.ceil(refQty / capacity)
-    }
+    const refQty = getRefQty(deductions)
+    const ts = buildTimestamp(entry_date)
 
-    // Upload images to Supabase if present
+    // Pre-calculate corrugation boxes needed
+    const corrugationBoxes = productKey && PRODUCT_CAPACITY_BY_KEY[productKey]
+      ? Math.ceil(refQty / PRODUCT_CAPACITY_BY_KEY[productKey])
+      : 0
+
+    const needsBlueBox = productKey === "cloth" || productKey === "newborn"
+    const needsRibbon  = productKey === "newborn"
+
+    // Upload images
     const imageUrls = []
     for (const file of req.files || []) {
       const url = await uploadToSupabase(file)
@@ -292,66 +304,102 @@ const bulkRemoveInventory = async (req, res, next) => {
     try {
       await client.query("BEGIN")
 
+      // ── Validate all auto-deducted items BEFORE touching anything ──────────
+      if (corrugationBoxes > 0) {
+        const r = await client.query("SELECT stock FROM products WHERE LOWER(name) = 'corrugation box'")
+        if (!r.rows.length) {
+          await client.query("ROLLBACK")
+          return res.status(404).json({ message: '"Corrugation Box" not found in inventory.' })
+        }
+        if (Number(r.rows[0].stock) < corrugationBoxes) {
+          await client.query("ROLLBACK")
+          return res.status(400).json({ message: `Insufficient Corrugation Box stock. Have: ${r.rows[0].stock}, Need: ${corrugationBoxes}` })
+        }
+      }
+      if (needsBlueBox) {
+        const r = await client.query("SELECT stock FROM products WHERE LOWER(name) = 'blue box'")
+        if (!r.rows.length) {
+          await client.query("ROLLBACK")
+          return res.status(404).json({ message: '"Blue Box" not found in inventory. Add it via Admin first.' })
+        }
+        if (Number(r.rows[0].stock) < refQty) {
+          await client.query("ROLLBACK")
+          return res.status(400).json({ message: `Insufficient Blue Box stock. Have: ${r.rows[0].stock}, Need: ${refQty}` })
+        }
+      }
+      if (needsRibbon) {
+        const r = await client.query("SELECT stock FROM products WHERE LOWER(name) = 'ribbon'")
+        if (!r.rows.length) {
+          await client.query("ROLLBACK")
+          return res.status(404).json({ message: '"Ribbon" not found in inventory. Add it via Admin first.' })
+        }
+        if (Number(r.rows[0].stock) < refQty) {
+          await client.query("ROLLBACK")
+          return res.status(400).json({ message: `Insufficient Ribbon stock. Have: ${r.rows[0].stock}m, Need: ${refQty}m` })
+        }
+      }
+
       const results = []
+
+      // ── Deduct main items ──────────────────────────────────────────────────
       for (let i = 0; i < deductions.length; i++) {
         const { name, quantity } = deductions[i]
         const qty = Number(quantity)
-
-        const productResult = await client.query(
-          "SELECT id, stock FROM products WHERE LOWER(name) = LOWER($1) FOR UPDATE",
-          [name]
+        const pr = await client.query(
+          "SELECT id, stock FROM products WHERE LOWER(name) = LOWER($1) FOR UPDATE", [name]
         )
-        if (!productResult.rows.length) {
+        if (!pr.rows.length) {
           await client.query("ROLLBACK")
           return res.status(404).json({ message: `Item not found: ${name}` })
         }
-
-        const product = productResult.rows[0]
-        const newStock = Number(product.stock) - qty
-
+        const newStock = Number(pr.rows[0].stock) - qty
         if (newStock < 0) {
           await client.query("ROLLBACK")
-          return res.status(400).json({
-            message: `Insufficient stock for "${name}". Available: ${product.stock}, Required: ${qty}`,
-          })
+          return res.status(400).json({ message: `Insufficient stock for "${name}". Have: ${pr.rows[0].stock}, Need: ${qty}` })
         }
-
-        await client.query("UPDATE products SET stock = $1 WHERE id = $2", [newStock, product.id])
-
-        // Attach images only to the first entry
-        const entryImages = i === 0 ? imageUrls : []
-
+        await client.query("UPDATE products SET stock = $1 WHERE id = $2", [newStock, pr.rows[0].id])
         const entry = await client.query(
-          `INSERT INTO inventory_entries
-           (product_id, type, quantity, destination, remarks, images, created_at)
-           VALUES ($1, 'remove', $2, $3, $4, $5, $6)
-           RETURNING *`,
-          [product.id, qty, destination, remarks || null, entryImages,
-           entry_date ? new Date(entry_date).toISOString() : new Date().toISOString()]
+          `INSERT INTO inventory_entries (product_id, type, quantity, destination, remarks, images, created_at)
+           VALUES ($1, 'remove', $2, $3, $4, $5, $6) RETURNING *`,
+          [pr.rows[0].id, qty, destination, remarks || null, i === 0 ? imageUrls : [], ts]
         )
         results.push(entry.rows[0])
       }
 
-      // Auto-deduct corrugation boxes (best effort — don't fail the whole removal if boxes are out of stock)
+      // ── Auto-deduct Corrugation Box ────────────────────────────────────────
       if (corrugationBoxes > 0) {
-        const boxResult = await client.query(
-          "SELECT id, stock FROM products WHERE LOWER(name) = 'corrugation box' FOR UPDATE"
+        const r = await client.query("SELECT id, stock FROM products WHERE LOWER(name) = 'corrugation box' FOR UPDATE")
+        await client.query("UPDATE products SET stock = $1 WHERE id = $2", [Number(r.rows[0].stock) - corrugationBoxes, r.rows[0].id])
+        const e = await client.query(
+          `INSERT INTO inventory_entries (product_id, type, quantity, destination, remarks, images, created_at)
+           VALUES ($1, 'remove', $2, $3, $4, '{}', $5) RETURNING *`,
+          [r.rows[0].id, corrugationBoxes, destination, `Auto: corrugation for ${productKey}`, ts]
         )
-        if (boxResult.rows.length > 0) {
-          const box = boxResult.rows[0]
-          const newBoxStock = Math.max(0, Number(box.stock) - corrugationBoxes)
-          await client.query("UPDATE products SET stock = $1 WHERE id = $2", [newBoxStock, box.id])
-          const boxEntry = await client.query(
-            `INSERT INTO inventory_entries
-             (product_id, type, quantity, destination, remarks, images, created_at)
-             VALUES ($1, 'remove', $2, $3, $4, '{}', $5)
-             RETURNING *`,
-            [box.id, corrugationBoxes, destination,
-             `Auto-deducted for ${productKey} removal (${remarks || ""})`.trim(),
-             entry_date ? new Date(entry_date).toISOString() : new Date().toISOString()]
-          )
-          results.push(boxEntry.rows[0])
-        }
+        results.push(e.rows[0])
+      }
+
+      // ── Auto-deduct Blue Box ───────────────────────────────────────────────
+      if (needsBlueBox) {
+        const r = await client.query("SELECT id, stock FROM products WHERE LOWER(name) = 'blue box' FOR UPDATE")
+        await client.query("UPDATE products SET stock = $1 WHERE id = $2", [Number(r.rows[0].stock) - refQty, r.rows[0].id])
+        const e = await client.query(
+          `INSERT INTO inventory_entries (product_id, type, quantity, destination, remarks, images, created_at)
+           VALUES ($1, 'remove', $2, $3, $4, '{}', $5) RETURNING *`,
+          [r.rows[0].id, refQty, destination, `Auto: blue box for ${productKey}`, ts]
+        )
+        results.push(e.rows[0])
+      }
+
+      // ── Auto-deduct Ribbon ─────────────────────────────────────────────────
+      if (needsRibbon) {
+        const r = await client.query("SELECT id, stock FROM products WHERE LOWER(name) = 'ribbon' FOR UPDATE")
+        await client.query("UPDATE products SET stock = $1 WHERE id = $2", [Number(r.rows[0].stock) - refQty, r.rows[0].id])
+        const e = await client.query(
+          `INSERT INTO inventory_entries (product_id, type, quantity, destination, remarks, images, created_at)
+           VALUES ($1, 'remove', $2, $3, $4, '{}', $5) RETURNING *`,
+          [r.rows[0].id, refQty, destination, `Auto: ${refQty}m ribbon for newborn`, ts]
+        )
+        results.push(e.rows[0])
       }
 
       await client.query("COMMIT")
@@ -421,7 +469,7 @@ const bulkAddInventory = async (req, res, next) => {
            VALUES ($1, 'add', $2, $3, $4, $5, $6)
            RETURNING *`,
           [product.id, qty, source, remarks || null, entryImages,
-           entry_date ? new Date(entry_date).toISOString() : new Date().toISOString()]
+           buildTimestamp(entry_date)]
         )
         results.push(entry.rows[0])
       }

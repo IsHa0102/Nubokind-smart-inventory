@@ -35,7 +35,7 @@ const PRODUCT_CATALOGUE = [
     image: "https://res.cloudinary.com/dgqcdiyad/image/upload/f_auto,q_auto/cloth_book_uu9rnk",
     items: [
       "My First Patterns Book", "My First Faces Book", "My First Puzzles Book",
-      "Blue Box", "Book Kit Sleeve", "Book Kit Thank You Card",
+      "Book Kit Sleeve", "Book Kit Thank You Card",
     ],
   },
   {
@@ -44,7 +44,7 @@ const PRODUCT_CATALOGUE = [
     image: "https://res.cloudinary.com/dgqcdiyad/image/upload/f_auto,q_auto/montessori_kit_gysxiw",
     items: [
       "Flashcards", "Ribbon", "Cloth Book", "Banner",
-      "Blue Box", "Gift Kit Sleeve", "Gift Kit Thank You Card",
+      "Gift Kit Sleeve", "Gift Kit Thank You Card",
     ],
   },
 ]
@@ -54,6 +54,13 @@ const CORRUGATION_BOX = {
   key: "corrugation",
   label: "Corrugation Box (Transport Box)",
   image: "https://res.cloudinary.com/dgqcdiyad/image/upload/f_auto,q_auto/corrugation_box_ph3v1n",
+}
+
+// ── Blue Box (ADD only) ────────────────────────────────────────────────────
+const BLUE_BOX_CARD = {
+  key: "bluebox",
+  label: "Blue Box",
+  image: "https://res.cloudinary.com/dgqcdiyad/image/upload/v1778126339/Screenshot_2026-05-07_092800_pes65w.png",
 }
 
 // ── Corrugation flow component — simple add to "Corrugation Box" stock ──────
@@ -206,6 +213,134 @@ function CorrugationFlow({ manufacturers }) {
   )
 }
 
+// ── Blue Box flow component — simple add to "Blue Box" stock ──────────────
+function BlueBoxFlow({ manufacturers }) {
+  const today = new Date().toISOString().split("T")[0]
+  const [qty, setQty] = useState("")
+  const [source, setSource] = useState("")
+  const [remarks, setRemarks] = useState("")
+  const [entryDate, setEntryDate] = useState(today)
+  const [images, setImages] = useState([])
+  const [imagePreviews, setImagePreviews] = useState([])
+  const [fileInputKey, setFileInputKey] = useState(0)
+  const [message, setMessage] = useState("")
+  const [submitting, setSubmitting] = useState(false)
+
+  const onFileChange = (e) => {
+    const incoming = Array.from(e.target.files || [])
+    const combined = [...images, ...incoming].slice(0, 3)
+    imagePreviews.forEach((u) => URL.revokeObjectURL(u))
+    setImages(combined)
+    setImagePreviews(combined.map((f) => URL.createObjectURL(f)))
+    setFileInputKey((k) => k + 1)
+  }
+
+  const removeImg = (i) => {
+    URL.revokeObjectURL(imagePreviews[i])
+    setImages((p) => p.filter((_, idx) => idx !== i))
+    setImagePreviews((p) => p.filter((_, idx) => idx !== i))
+    setFileInputKey((k) => k + 1)
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!qty || Number(qty) <= 0) { setMessage("Please enter a valid quantity."); return }
+    if (!source) { setMessage("Please select a source."); return }
+    setSubmitting(true)
+    setMessage("")
+    try {
+      await bulkAddInventory({
+        additions: [{ name: "Blue Box", quantity: Number(qty) }],
+        source, remarks, images, entry_date: entryDate,
+      })
+      setMessage("✓ Blue Boxes added successfully.")
+      setQty(""); setSource(""); setRemarks(""); setEntryDate(today)
+      imagePreviews.forEach((u) => URL.revokeObjectURL(u))
+      setImages([]); setImagePreviews([]); setFileInputKey((k) => k + 1)
+    } catch (err) {
+      setMessage(err?.response?.data?.message || "Failed to add. Please try again.")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="grid gap-4">
+      <p className="text-sm font-semibold text-slate-700">Step 2 — Details</p>
+
+      <label className="grid gap-2 text-sm font-medium text-slate-700">
+        Number of Blue Boxes received *
+        <input type="number" min="1" value={qty} onChange={(e) => setQty(e.target.value)}
+          className="rounded-lg border border-slate-300 px-3 py-2" placeholder="e.g. 50" />
+      </label>
+
+      {qty && Number(qty) > 0 && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm">
+          <span className="font-semibold text-emerald-800">This will add: </span>
+          <span className="text-emerald-700">{Number(qty)} Blue Box{Number(qty) !== 1 ? "es" : ""}</span>
+        </div>
+      )}
+
+      <label className="grid gap-2 text-sm font-medium text-slate-700">
+        From (Source) *
+        <select value={source} onChange={(e) => setSource(e.target.value)}
+          className="rounded-lg border border-slate-300 px-3 py-2">
+          <option value="">Select source</option>
+          {manufacturers.map((m) => (<option key={m.id} value={m.name}>{m.name}</option>))}
+        </select>
+      </label>
+
+      <label className="grid gap-2 text-sm font-medium text-slate-700">
+        Remarks
+        <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)}
+          rows="2" className="rounded-lg border border-slate-300 px-3 py-2" />
+      </label>
+
+      <label className="grid gap-2 text-sm font-medium text-slate-700">
+        Date *
+        <input type="date" value={entryDate} max={today} onChange={(e) => setEntryDate(e.target.value)}
+          className="rounded-lg border border-slate-300 px-3 py-2" />
+      </label>
+
+      <div className="grid gap-2">
+        <p className="text-sm font-medium text-slate-700">
+          Images (max 3){images.length > 0 && <span className="font-normal text-slate-400"> — {images.length} selected</span>}
+        </p>
+        {images.length < 3 && (
+          <input key={fileInputKey} type="file" accept="image/*" multiple onChange={onFileChange}
+            className="rounded-lg border border-slate-300 p-2 text-sm" />
+        )}
+        {imagePreviews.length > 0 && (
+          <div className="mt-1 grid grid-cols-3 gap-2">
+            {imagePreviews.map((preview, idx) => (
+              <div key={idx} className="relative group">
+                <img src={preview} alt="" className="h-20 w-full rounded-lg object-cover border border-slate-200" />
+                <button type="button" onClick={() => removeImg(idx)}
+                  className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition">
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+                <span className="absolute bottom-1 left-1 rounded bg-black/40 px-1 text-[10px] text-white">{idx + 1}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {message && (
+        <p className={`text-sm font-medium ${message.startsWith("✓") ? "text-emerald-600" : "text-rose-600"}`}>
+          {message}
+        </p>
+      )}
+
+      <button type="submit" disabled={submitting || !qty || Number(qty) <= 0 || !source}
+        className="w-full rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed sm:w-fit transition-colors">
+        {submitting ? "Adding..." : "Confirm Add"}
+      </button>
+    </form>
+  )
+}
 
 const REMOVE_PRODUCTS = [
   {
@@ -241,7 +376,7 @@ const REMOVE_PRODUCTS = [
     variants: null,
     fixedItems: [
       "My First Patterns Book", "My First Faces Book", "My First Puzzles Book",
-      "Blue Box", "Book Kit Sleeve", "Book Kit Thank You Card",
+      "Book Kit Sleeve", "Book Kit Thank You Card",
     ],
   },
   {
@@ -251,8 +386,8 @@ const REMOVE_PRODUCTS = [
     variants: null,
     fixedItems: [
       { name: "Flashcards", multiplier: 10 },
-      "Ribbon", "Cloth Book", "Banner",
-      "Blue Box", "Gift Kit Sleeve", "Gift Kit Thank You Card",
+      "Cloth Book", "Banner",
+      "Gift Kit Sleeve", "Gift Kit Thank You Card",
     ],
   },
 ]
@@ -540,6 +675,19 @@ function RemoveFlow({ destinations }) {
                     <span className="font-semibold text-rose-600">− {d.quantity}</span>
                   </div>
                 ))}
+                {/* Auto-deducted items */}
+                {(selectedProduct === "cloth" || selectedProduct === "newborn") && quantity && Number(quantity) > 0 && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-500 italic">Blue Box (auto)</span>
+                    <span className="font-semibold text-rose-400">− {Number(quantity)}</span>
+                  </div>
+                )}
+                {selectedProduct === "newborn" && quantity && Number(quantity) > 0 && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-500 italic">Ribbon (auto) — meters</span>
+                    <span className="font-semibold text-rose-400">− {Number(quantity)}m</span>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -608,6 +756,8 @@ function StockEntryPage() {
   }
 
   const isCorrugation = form.type === "add" && selectedCatalogueKey === "corrugation"
+  const isBlueBox = form.type === "add" && selectedCatalogueKey === "bluebox"
+  const isSpecialCard = isCorrugation || isBlueBox
 
   const typeFields = useMemo(() => {
     if (form.type === "add") return "source"
@@ -747,6 +897,14 @@ function StockEntryPage() {
                     onSelect={handleCatalogueSelect}
                   />
                 )}
+                {/* Blue Box — ADD only */}
+                {form.type === "add" && (
+                  <ProductCard
+                    item={BLUE_BOX_CARD}
+                    selected={selectedCatalogueKey === "bluebox"}
+                    onSelect={handleCatalogueSelect}
+                  />
+                )}
               </div>
             </div>
 
@@ -758,8 +916,16 @@ function StockEntryPage() {
               </>
             )}
 
-            {/* Regular item form — hidden when corrugation selected */}
-            {selectedCatalogueKey && !isCorrugation && (
+            {/* Blue Box flow */}
+            {isBlueBox && (
+              <>
+                <div className="h-px bg-slate-100" />
+                <BlueBoxFlow manufacturers={manufacturers} />
+              </>
+            )}
+
+            {/* Regular item form — hidden when special card selected */}
+            {selectedCatalogueKey && !isSpecialCard && (
               <>
                 <div className="h-px bg-slate-100" />
                 <div className="grid gap-4">
@@ -789,7 +955,12 @@ function StockEntryPage() {
                   </label>
 
                   <label className="grid gap-2 text-sm font-medium text-slate-700">
-                    Quantity *
+                    {(() => {
+                      const selectedItem = filteredProducts.find(p => String(p.id) === String(form.product_id))
+                      return selectedItem?.name?.toLowerCase() === "ribbon"
+                        ? "Quantity (in meters) *"
+                        : "Quantity *"
+                    })()}
                     <input
                       name="quantity"
                       type="number"
@@ -797,6 +968,11 @@ function StockEntryPage() {
                       value={form.quantity}
                       onChange={onChange}
                       className="rounded-lg border border-slate-300 px-3 py-2"
+                      placeholder={
+                        filteredProducts.find(p => String(p.id) === String(form.product_id))?.name?.toLowerCase() === "ribbon"
+                          ? "e.g. 100 meters"
+                          : ""
+                      }
                     />
                   </label>
 
@@ -870,7 +1046,7 @@ function StockEntryPage() {
               </p>
             )}
 
-            {!isCorrugation && (
+            {!isSpecialCard && (
               <button type="submit" disabled={!selectedCatalogueKey}
                 className="w-full rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed sm:w-fit transition-colors">
                 Save Entry
