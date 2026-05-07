@@ -1,13 +1,15 @@
-# NUBO Inventory Task Progress: Fix StockHistory.jsx Error
-
-## Steps from Approved Plan:
-- [x] Create TODO.md to track progress
-- [x] Apply defensive fixes to StockHistory.jsx (optional chaining, defaults for empty/undefined data)
-- [x] Test the component handles empty data gracefully  
-- [ ] Verify no runtime errors at line 120 during render
-- [ ] Run `cd client && npm run dev` and check browser console
-- [ ] Complete task with attempt_completion
-
-## Status
-Approved plan to fix frontend defensively. Starting implementation...
+- [x] Restore/repair client/src/pages/StockEntryPage.jsx so it compiles (fix corrupted JSX/code blocks)
+- [ ] Implement requested inventory logic changes:
+  - [ ] Frontend: Blue Box ADD-only button + remove Blue Box from Cloth Book Set & Newborn Gift Kit dropdowns
+  - [ ] Frontend: Ribbon (Newborn Gift Kit) meters UI: label + quantity input stored as meters
+  - [ ] Frontend: REMOVE flow auto-deduct:
+    - [ ] Q Blue Boxes for Cloth Book Set removal
+    - [ ] Q Blue Boxes for Newborn Gift Kit removal
+    - [ ] Q meters Ribbon for Newborn Gift Kit removal
+    - [ ] Deduction must be automatic; no UI input/selection for those deductions
+  - [ ] Backend: server/src/controllers/inventoryController.js
+    - [ ] Add automatic Blue Box deduction inside bulkRemoveInventory
+    - [ ] Add automatic Ribbon meters deduction inside bulkRemoveInventory
+    - [ ] Add transactional validation (insufficient Blue Boxes / Ribbon meters / other items)
+- [ ] Frontend/backend checks after code updates
 
