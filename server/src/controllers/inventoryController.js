@@ -1,4 +1,4 @@
-const pool = require("../config/db")
+﻿const pool = require("../config/db")
 const supabase = require("../config/supabase")
 const { v4: uuidv4 } = require("crypto").randomUUID ? { v4: () => require("crypto").randomUUID() } : require("crypto")
 
@@ -52,7 +52,7 @@ const getInventoryEntries = async (req, res, next) => {
     const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : ""
 
     const countResult = await pool.query(
-      `SELECT COUNT(*)::int AS total FROM inventory_entries ie ${whereSql}`,
+      `SELECT COUNT(*)::int AS total FROM warehouse_entries ie ${whereSql}`,
       values
     )
     const total = countResult.rows[0]?.total || 0
@@ -70,8 +70,8 @@ const getInventoryEntries = async (req, res, next) => {
         ie.remarks,
         ie.images,
         ie.created_at
-       FROM inventory_entries ie
-       JOIN products p ON p.id = ie.product_id
+       FROM warehouse_entries ie
+       JOIN warehouse_products p ON p.id = ie.product_id
        ${whereSql}
        ORDER BY ie.created_at DESC
        LIMIT $${dataValues.length - 1}
@@ -120,7 +120,7 @@ const createInventoryEntry = async (req, res, next) => {
       await client.query("BEGIN")
 
       const productResult = await client.query(
-        "SELECT stock FROM products WHERE id = $1 FOR UPDATE",
+        "SELECT stock FROM warehouse_products WHERE id = $1 FOR UPDATE",
         [product_id]
       )
       if (!productResult.rows.length) {
@@ -135,12 +135,12 @@ const createInventoryEntry = async (req, res, next) => {
       if (type === "adjustment") nextStock = qty
 
       await client.query(
-        "UPDATE products SET stock = $1 WHERE id = $2",
+        "UPDATE warehouse_products SET stock = $1 WHERE id = $2",
         [nextStock, product_id]
       )
 
       const entryResult = await client.query(
-        `INSERT INTO inventory_entries
+        `INSERT INTO warehouse_entries
          (product_id, type, quantity, source, destination, remarks, images, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *`,
@@ -167,7 +167,7 @@ const deleteInventoryEntry = async (req, res, next) => {
 
     // Fetch the entry first to get images and reverse the stock change
     const entryResult = await pool.query(
-      "SELECT * FROM inventory_entries WHERE id = $1",
+      "SELECT * FROM warehouse_entries WHERE id = $1",
       [id]
     )
     if (!entryResult.rows.length) {
@@ -181,7 +181,7 @@ const deleteInventoryEntry = async (req, res, next) => {
 
       // Reverse the stock change caused by this entry
       const productResult = await client.query(
-        "SELECT stock FROM products WHERE id = $1 FOR UPDATE",
+        "SELECT stock FROM warehouse_products WHERE id = $1 FOR UPDATE",
         [entry.product_id]
       )
       if (productResult.rows.length) {
@@ -192,13 +192,13 @@ const deleteInventoryEntry = async (req, res, next) => {
         // For "adjustment" we can't reliably reverse — skip stock change
         if (entry.type !== "adjustment") {
           await client.query(
-            "UPDATE products SET stock = $1 WHERE id = $2",
+            "UPDATE warehouse_products SET stock = $1 WHERE id = $2",
             [Math.max(0, reversedStock), entry.product_id]
           )
         }
       }
 
-      await client.query("DELETE FROM inventory_entries WHERE id = $1", [id])
+      await client.query("DELETE FROM warehouse_entries WHERE id = $1", [id])
       await client.query("COMMIT")
 
       // Delete images from Supabase Storage (best effort, don't fail if missing)
@@ -306,7 +306,7 @@ const bulkRemoveInventory = async (req, res, next) => {
 
       // ── Validate all auto-deducted items BEFORE touching anything ──────────
       if (corrugationBoxes > 0) {
-        const r = await client.query("SELECT stock FROM products WHERE LOWER(name) = 'corrugation box'")
+        const r = await client.query("SELECT stock FROM warehouse_products WHERE LOWER(name) = 'corrugation box'")
         if (!r.rows.length) {
           await client.query("ROLLBACK")
           return res.status(404).json({ message: '"Corrugation Box" not found in inventory.' })
@@ -317,7 +317,7 @@ const bulkRemoveInventory = async (req, res, next) => {
         }
       }
       if (needsBlueBox) {
-        const r = await client.query("SELECT stock FROM products WHERE LOWER(name) = 'blue box'")
+        const r = await client.query("SELECT stock FROM warehouse_products WHERE LOWER(name) = 'blue box'")
         if (!r.rows.length) {
           await client.query("ROLLBACK")
           return res.status(404).json({ message: '"Blue Box" not found in inventory. Add it via Admin first.' })
@@ -328,7 +328,7 @@ const bulkRemoveInventory = async (req, res, next) => {
         }
       }
       if (needsRibbon) {
-        const r = await client.query("SELECT stock FROM products WHERE LOWER(name) = 'ribbon'")
+        const r = await client.query("SELECT stock FROM warehouse_products WHERE LOWER(name) = 'ribbon'")
         if (!r.rows.length) {
           await client.query("ROLLBACK")
           return res.status(404).json({ message: '"Ribbon" not found in inventory. Add it via Admin first.' })
@@ -346,7 +346,7 @@ const bulkRemoveInventory = async (req, res, next) => {
         const { name, quantity } = deductions[i]
         const qty = Number(quantity)
         const pr = await client.query(
-          "SELECT id, stock FROM products WHERE LOWER(name) = LOWER($1) FOR UPDATE", [name]
+          "SELECT id, stock FROM warehouse_products WHERE LOWER(name) = LOWER($1) FOR UPDATE", [name]
         )
         if (!pr.rows.length) {
           await client.query("ROLLBACK")
@@ -357,9 +357,9 @@ const bulkRemoveInventory = async (req, res, next) => {
           await client.query("ROLLBACK")
           return res.status(400).json({ message: `Insufficient stock for "${name}". Have: ${pr.rows[0].stock}, Need: ${qty}` })
         }
-        await client.query("UPDATE products SET stock = $1 WHERE id = $2", [newStock, pr.rows[0].id])
+        await client.query("UPDATE warehouse_products SET stock = $1 WHERE id = $2", [newStock, pr.rows[0].id])
         const entry = await client.query(
-          `INSERT INTO inventory_entries (product_id, type, quantity, destination, remarks, images, created_at)
+          `INSERT INTO warehouse_entries (product_id, type, quantity, destination, remarks, images, created_at)
            VALUES ($1, 'remove', $2, $3, $4, $5, $6) RETURNING *`,
           [pr.rows[0].id, qty, destination, remarks || null, i === 0 ? imageUrls : [], ts]
         )
@@ -368,10 +368,10 @@ const bulkRemoveInventory = async (req, res, next) => {
 
       // ── Auto-deduct Corrugation Box ────────────────────────────────────────
       if (corrugationBoxes > 0) {
-        const r = await client.query("SELECT id, stock FROM products WHERE LOWER(name) = 'corrugation box' FOR UPDATE")
-        await client.query("UPDATE products SET stock = $1 WHERE id = $2", [Number(r.rows[0].stock) - corrugationBoxes, r.rows[0].id])
+        const r = await client.query("SELECT id, stock FROM warehouse_products WHERE LOWER(name) = 'corrugation box' FOR UPDATE")
+        await client.query("UPDATE warehouse_products SET stock = $1 WHERE id = $2", [Number(r.rows[0].stock) - corrugationBoxes, r.rows[0].id])
         const e = await client.query(
-          `INSERT INTO inventory_entries (product_id, type, quantity, destination, remarks, images, created_at)
+          `INSERT INTO warehouse_entries (product_id, type, quantity, destination, remarks, images, created_at)
            VALUES ($1, 'remove', $2, $3, $4, '{}', $5) RETURNING *`,
           [r.rows[0].id, corrugationBoxes, destination, `Auto: corrugation for ${productKey}`, ts]
         )
@@ -380,10 +380,10 @@ const bulkRemoveInventory = async (req, res, next) => {
 
       // ── Auto-deduct Blue Box ───────────────────────────────────────────────
       if (needsBlueBox) {
-        const r = await client.query("SELECT id, stock FROM products WHERE LOWER(name) = 'blue box' FOR UPDATE")
-        await client.query("UPDATE products SET stock = $1 WHERE id = $2", [Number(r.rows[0].stock) - refQty, r.rows[0].id])
+        const r = await client.query("SELECT id, stock FROM warehouse_products WHERE LOWER(name) = 'blue box' FOR UPDATE")
+        await client.query("UPDATE warehouse_products SET stock = $1 WHERE id = $2", [Number(r.rows[0].stock) - refQty, r.rows[0].id])
         const e = await client.query(
-          `INSERT INTO inventory_entries (product_id, type, quantity, destination, remarks, images, created_at)
+          `INSERT INTO warehouse_entries (product_id, type, quantity, destination, remarks, images, created_at)
            VALUES ($1, 'remove', $2, $3, $4, '{}', $5) RETURNING *`,
           [r.rows[0].id, refQty, destination, `Auto: blue box for ${productKey}`, ts]
         )
@@ -392,10 +392,10 @@ const bulkRemoveInventory = async (req, res, next) => {
 
       // ── Auto-deduct Ribbon ─────────────────────────────────────────────────
       if (needsRibbon) {
-        const r = await client.query("SELECT id, stock FROM products WHERE LOWER(name) = 'ribbon' FOR UPDATE")
-        await client.query("UPDATE products SET stock = $1 WHERE id = $2", [Number(r.rows[0].stock) - refQty, r.rows[0].id])
+        const r = await client.query("SELECT id, stock FROM warehouse_products WHERE LOWER(name) = 'ribbon' FOR UPDATE")
+        await client.query("UPDATE warehouse_products SET stock = $1 WHERE id = $2", [Number(r.rows[0].stock) - refQty, r.rows[0].id])
         const e = await client.query(
-          `INSERT INTO inventory_entries (product_id, type, quantity, destination, remarks, images, created_at)
+          `INSERT INTO warehouse_entries (product_id, type, quantity, destination, remarks, images, created_at)
            VALUES ($1, 'remove', $2, $3, $4, '{}', $5) RETURNING *`,
           [r.rows[0].id, refQty, destination, `Auto: ${refQty}m ribbon for newborn`, ts]
         )
@@ -449,7 +449,7 @@ const bulkAddInventory = async (req, res, next) => {
         const qty = Number(quantity)
 
         const productResult = await client.query(
-          "SELECT id, stock FROM products WHERE LOWER(name) = LOWER($1) FOR UPDATE",
+          "SELECT id, stock FROM warehouse_products WHERE LOWER(name) = LOWER($1) FOR UPDATE",
           [name]
         )
         if (!productResult.rows.length) {
@@ -460,11 +460,11 @@ const bulkAddInventory = async (req, res, next) => {
         const product = productResult.rows[0]
         const newStock = Number(product.stock) + qty
 
-        await client.query("UPDATE products SET stock = $1 WHERE id = $2", [newStock, product.id])
+        await client.query("UPDATE warehouse_products SET stock = $1 WHERE id = $2", [newStock, product.id])
 
         const entryImages = i === 0 ? imageUrls : []
         const entry = await client.query(
-          `INSERT INTO inventory_entries
+          `INSERT INTO warehouse_entries
            (product_id, type, quantity, source, remarks, images, created_at)
            VALUES ($1, 'add', $2, $3, $4, $5, $6)
            RETURNING *`,
