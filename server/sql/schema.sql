@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS destinations (
 CREATE TABLE IF NOT EXISTS inventory_entries (
   id BIGSERIAL PRIMARY KEY,
   product_id BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-  type TEXT NOT NULL CHECK (type IN ('add', 'remove', 'adjustment')),
+  type TEXT NOT NULL CHECK (type IN ('add', 'remove', 'adjustment', 'shipment')),
   quantity INTEGER NOT NULL CHECK (quantity > 0),
   source TEXT,
   destination TEXT,
