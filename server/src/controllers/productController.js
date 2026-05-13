@@ -1,8 +1,8 @@
-const pool = require("../config/db")
+﻿const pool = require("../config/db")
 
 const getProducts = async (_req, res, next) => {
   try {
-    const result = await pool.query("SELECT * FROM products ORDER BY id DESC")
+    const result = await pool.query("SELECT * FROM warehouse_products ORDER BY id DESC")
     res.json(result.rows)
   } catch (err) {
     next(err)
@@ -19,7 +19,7 @@ const createProduct = async (req, res, next) => {
       return res.status(400).json({ message: "item_type must be 'Product' or 'Packaging'." })
     }
     const result = await pool.query(
-      `INSERT INTO products (name, stock, low_stock_threshold, item_type)
+      `INSERT INTO warehouse_products (name, stock, low_stock_threshold, item_type)
        VALUES ($1, $2, $3, $4)
        RETURNING *`,
       [name, Number(stock), Number(low_stock_threshold), item_type]
@@ -59,7 +59,7 @@ const updateProduct = async (req, res, next) => {
 
     values.push(id)
     const result = await pool.query(
-      `UPDATE products SET ${updates.join(", ")} WHERE id = $${paramIndex} RETURNING *`,
+      `UPDATE warehouse_products SET ${updates.join(", ")} WHERE id = $${paramIndex} RETURNING *`,
       values
     )
     if (!result.rows.length) return res.status(404).json({ message: "Product not found." })
@@ -76,7 +76,7 @@ const deleteProduct = async (req, res, next) => {
   try {
     const { id } = req.params
     const usageCheck = await pool.query(
-      "SELECT COUNT(*)::int AS cnt FROM inventory_entries WHERE product_id = $1",
+      "SELECT COUNT(*)::int AS cnt FROM warehouse_entries WHERE product_id = $1",
       [id]
     )
     if (usageCheck.rows[0].cnt > 0) {
@@ -84,7 +84,7 @@ const deleteProduct = async (req, res, next) => {
         message: `Cannot delete — this product has ${usageCheck.rows[0].cnt} inventory entries.`,
       })
     }
-    const result = await pool.query("DELETE FROM products WHERE id = $1 RETURNING id", [id])
+    const result = await pool.query("DELETE FROM warehouse_products WHERE id = $1 RETURNING id", [id])
     if (!result.rows.length) return res.status(404).json({ message: "Product not found." })
     return res.status(204).send()
   } catch (err) {
