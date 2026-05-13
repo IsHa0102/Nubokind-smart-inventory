@@ -1,4 +1,4 @@
-﻿CREATE TABLE IF NOT EXISTS warehouse_products (
+CREATE TABLE IF NOT EXISTS products (
   id BIGSERIAL PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
   stock INTEGER NOT NULL DEFAULT 0,
@@ -6,20 +6,20 @@
   item_type TEXT NOT NULL DEFAULT 'Product' CHECK (item_type IN ('Product', 'Packaging'))
 );
 
-CREATE TABLE IF NOT EXISTS warehouse_manufacturers (
+CREATE TABLE IF NOT EXISTS manufacturers (
   id BIGSERIAL PRIMARY KEY,
   name TEXT NOT NULL UNIQUE
 );
 
-CREATE TABLE IF NOT EXISTS warehouse_destinations (
+CREATE TABLE IF NOT EXISTS destinations (
   id BIGSERIAL PRIMARY KEY,
   name TEXT NOT NULL UNIQUE
 );
 
-CREATE TABLE IF NOT EXISTS warehouse_entries (
+CREATE TABLE IF NOT EXISTS inventory_entries (
   id BIGSERIAL PRIMARY KEY,
-  product_id BIGINT NOT NULL REFERENCES warehouse_products(id) ON DELETE CASCADE,
-  type TEXT NOT NULL CHECK (type IN ('add', 'remove', 'adjustment')),
+  product_id BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  type TEXT NOT NULL CHECK (type IN ('add', 'remove', 'adjustment', 'shipment')),
   quantity INTEGER NOT NULL CHECK (quantity > 0),
   source TEXT,
   destination TEXT,

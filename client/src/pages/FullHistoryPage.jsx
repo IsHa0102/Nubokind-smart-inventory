@@ -14,7 +14,7 @@ const formatDate = (value) => {
 
 const getSignedQuantity = (entry) => {
   if (entry.type === "add") return `+${entry.quantity}`
-  if (entry.type === "remove") return `-${entry.quantity}`
+  if (entry.type === "remove" || entry.type === "shipment") return `-${entry.quantity}`
   return `=${entry.quantity}`
 }
 
@@ -187,7 +187,8 @@ function FullHistoryPage() {
         >
           <option value="">All types</option>
           <option value="add">Add</option>
-          <option value="remove">Remove</option>
+          <option value="shipment">Shipment</option>
+          <option value="remove">Remove (legacy)</option>
           <option value="adjustment">Recount</option>
         </select>
 
@@ -237,11 +238,15 @@ function FullHistoryPage() {
               </thead>
               <tbody>
                 {entries.map((entry, idx) => {
-                  const typeLabel = entry.type === "add" ? "Add" : entry.type === "remove" ? "Remove" : "Recount"
+                  const typeLabel =
+                    entry.type === "add" ? "Add"
+                    : entry.type === "shipment" ? "Shipment"
+                    : entry.type === "remove" ? "Remove"
+                    : "Recount"
                   const typeColor =
                     entry.type === "add"
                       ? "text-emerald-700 bg-emerald-50 border border-emerald-200"
-                      : entry.type === "remove"
+                      : entry.type === "shipment" || entry.type === "remove"
                       ? "text-rose-700 bg-rose-50 border border-rose-200"
                       : "text-amber-700 bg-amber-50 border border-amber-200"
                   const qty = getSignedQuantity(entry)
