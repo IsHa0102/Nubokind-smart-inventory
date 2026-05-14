@@ -18,7 +18,7 @@ const PRODUCT_CATALOGUE = [
     items: [
       "Sage Green Teether", "Aqua Blue Teether", "Slate Grey Teether",
       "Oat Beige Teether", "Baby Pink Teether",
-      "Ele Box", "Ele Thank You Card",
+      "Ele Box",
     ],
   },
   {
@@ -27,7 +27,7 @@ const PRODUCT_CATALOGUE = [
     image: "https://res.cloudinary.com/dgqcdiyad/image/upload/f_auto,q_auto/kiko_teether_baby_hand_green_b23ujn",
     items: [
       "Sage Green Kiko Teether", "Cloud White Kiko Teether",
-      "Kiko Box", "Thank You Card",
+      "Kiko Box",
     ],
   },
   {
@@ -53,6 +53,12 @@ const PRODUCT_CATALOGUE = [
     label: "Potli",
     image: null,
     items: ["Potli"],
+  },
+  {
+    key: "teether-tyc",
+    label: "Teether Thank You Card",
+    image: null,
+    items: ["Teether Thank You Card"],
   },
 ]
 
@@ -87,7 +93,8 @@ const SHIPMENT_PRODUCTS = [
       { key: "sg_ob", label: "Sage Green + Oat Beige",  colors: ["Sage Green Teether", "Oat Beige Teether"] },
       { key: "sg_bp", label: "Sage Green + Baby Pink",  colors: ["Sage Green Teether", "Baby Pink Teether"] },
     ],
-    fixedItems: ["Ele Box", "Ele Thank You Card"],
+    fixedItems: ["Ele Box"],
+    autoDeducts: [{ name: "Teether Thank You Card", multiplier: 1 }],
   },
   {
     key: "kiko",
@@ -97,7 +104,8 @@ const SHIPMENT_PRODUCTS = [
       { key: "sg", label: "Sage Green",  colors: ["Sage Green Kiko Teether"] },
       { key: "cw", label: "Cloud White", colors: ["Cloud White Kiko Teether"] },
     ],
-    fixedItems: ["Kiko Box", "Thank You Card"],
+    fixedItems: ["Kiko Box"],
+    autoDeducts: [{ name: "Teether Thank You Card", multiplier: 1 }],
   },
   {
     key: "cloth",
@@ -260,7 +268,8 @@ function CorrugationFlow({ manufacturers }) {
       </label>
       <div className="grid gap-2">
         <p className="text-sm font-medium text-slate-700">
-          Images (max 3){images.length > 0 && <span className="font-normal text-slate-400"> — {images.length} selected</span>}
+          Images <span className="font-normal text-slate-400">(Optional, max 3)</span>
+          {images.length > 0 && <span className="font-normal text-slate-400"> — {images.length} selected</span>}
         </p>
         {images.length < 3 && (
           <input key={fileInputKey} type="file" accept="image/*" multiple onChange={onFileChange}
@@ -379,7 +388,8 @@ function BlueBoxFlow({ manufacturers }) {
       </label>
       <div className="grid gap-2">
         <p className="text-sm font-medium text-slate-700">
-          Images (max 3){images.length > 0 && <span className="font-normal text-slate-400"> — {images.length} selected</span>}
+          Images <span className="font-normal text-slate-400">(Optional, max 3)</span>
+          {images.length > 0 && <span className="font-normal text-slate-400"> — {images.length} selected</span>}
         </p>
         {images.length < 3 && (
           <input key={fileInputKey} type="file" accept="image/*" multiple onChange={onFileChange}
@@ -532,6 +542,15 @@ function ShipmentFlow({ destinations }) {
 
   const totalQty = lines.reduce((sum, l) => sum + l.qty, 0)
 
+  // Full deduction list including corrugation (shown in preview + sent to backend)
+  const fullDeductions = useMemo(() => {
+    const corrugQty = Number(corrugationBoxesUsed)
+    if (corrugQty > 0) {
+      return [...allDeductions, { name: "Corrugation Box", quantity: corrugQty }]
+    }
+    return allDeductions
+  }, [allDeductions, corrugationBoxesUsed])
+
   const handleCardClick = (productKey) => {
     if (activeProductKey === productKey) {
       setActiveProductKey(null)
@@ -610,19 +629,18 @@ function ShipmentFlow({ destinations }) {
     e.preventDefault()
     if (lines.length === 0) { setMessage("Please add at least one product to the shipment."); return }
     if (!destination) { setMessage("Please select a destination."); return }
-
-    const finalRemarks = [
-      remarks,
-      corrugationBoxesUsed ? `Corrugation boxes used: ${corrugationBoxesUsed}` : "",
-    ].filter(Boolean).join(" | ")
+    if (!corrugationBoxesUsed || Number(corrugationBoxesUsed) <= 0) {
+      setMessage("Please enter the number of corrugation boxes used.")
+      return
+    }
 
     setSubmitting(true)
     setMessage("")
     try {
       await bulkRemoveInventory({
-        deductions: allDeductions,
+        deductions: fullDeductions,
         destination,
-        remarks: finalRemarks || undefined,
+        remarks: remarks || undefined,
         images,
         entry_date: entryDate,
       })
@@ -707,8 +725,8 @@ function ShipmentFlow({ destinations }) {
             )}
 
             {/* Quantity + Add */}
-            <div className="flex items-end gap-3">
-              <label className="grid gap-1 text-xs font-medium text-slate-600 flex-1 max-w-[140px]">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <label className="grid gap-1 text-xs font-medium text-slate-600">
                 Quantity *
                 <input
                   type="number"
@@ -716,7 +734,7 @@ function ShipmentFlow({ destinations }) {
                   value={pendingQty}
                   onChange={(e) => setPendingQty(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addLine() } }}
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                  className="w-full sm:w-36 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
                   placeholder="e.g. 5"
                 />
               </label>
@@ -724,7 +742,7 @@ function ShipmentFlow({ destinations }) {
                 type="button"
                 onClick={addLine}
                 disabled={!pendingQty || Number(pendingQty) <= 0 || (!!activeProduct.variants && !pendingVariant)}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="shrink-0 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 + Add to Shipment
               </button>
@@ -792,7 +810,7 @@ function ShipmentFlow({ destinations }) {
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
             <p className="mb-3 text-sm font-semibold text-amber-800">This will deduct from inventory:</p>
             <div className="grid gap-1.5">
-              {allDeductions.map((d, i) => (
+              {fullDeductions.map((d, i) => (
                 <div key={i} className="flex items-center justify-between text-sm">
                   <span className="text-slate-700">{d.name}</span>
                   <span className="font-semibold text-rose-600">− {d.quantity}</span>
@@ -817,17 +835,17 @@ function ShipmentFlow({ destinations }) {
 
             <div className="grid gap-1">
               <label className="text-sm font-medium text-slate-700">
-                Corrugation boxes used{" "}
-                <span className="text-xs font-normal text-slate-400">(informational only — not deducted from stock)</span>
+                Corrugation boxes used *
               </label>
               <input
                 type="number"
-                min="0"
+                min="1"
                 value={corrugationBoxesUsed}
                 onChange={(e) => setCorrugationBoxesUsed(e.target.value)}
                 className="rounded-lg border border-slate-300 px-3 py-2 text-sm max-w-[200px]"
-                placeholder="Optional"
+                placeholder="e.g. 15"
               />
+              <p className="text-xs text-slate-500">This quantity will be deducted from Corrugation Box inventory</p>
             </div>
 
             <label className="grid gap-2 text-sm font-medium text-slate-700">
@@ -846,7 +864,8 @@ function ShipmentFlow({ destinations }) {
             {/* Images */}
             <div className="grid gap-2">
               <p className="text-sm font-medium text-slate-700">
-                Images (max 3){images.length > 0 && <span className="font-normal text-slate-400"> — {images.length} selected</span>}
+                Images <span className="font-normal text-slate-400">(Optional, max 3)</span>
+                {images.length > 0 && <span className="font-normal text-slate-400"> — {images.length} selected</span>}
               </p>
               {images.length < 3 && (
                 <input key={fileInputKey} type="file" accept="image/*" multiple onChange={onFileChange}
@@ -918,7 +937,7 @@ function ShipmentFlow({ destinations }) {
 
       <button
         type="submit"
-        disabled={submitting || lines.length === 0 || !destination}
+        disabled={submitting || lines.length === 0 || !destination || !corrugationBoxesUsed || Number(corrugationBoxesUsed) <= 0}
         className="w-full rounded-lg bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-rose-500 disabled:opacity-40 disabled:cursor-not-allowed sm:w-fit transition-colors"
       >
         {submitting ? "Recording shipment..." : `Confirm Shipment${totalQty > 0 ? ` (${totalQty} units)` : ""}`}
@@ -1214,9 +1233,9 @@ function StockEntryPage() {
                   {/* Images */}
                   <div className="grid gap-2">
                     <p className="text-sm font-medium text-slate-700">
-                      Images (max 3){" "}
+                      Images <span className="font-normal text-slate-400">(Optional, max 3)</span>
                       {form.images.length > 0 && (
-                        <span className="font-normal text-slate-400">— {form.images.length} selected</span>
+                        <span className="font-normal text-slate-400"> — {form.images.length} selected</span>
                       )}
                     </p>
                     {form.images.length < 3 && (
