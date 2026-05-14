@@ -3,9 +3,10 @@ import { useNavigate } from "react-router-dom"
 import { fetchRecentInventoryEntries } from "../api/inventoryApi"
 
 const typeStyleMap = {
-  add: "text-emerald-700 bg-emerald-50",
-  remove: "text-rose-700 bg-rose-50",
-  recount: "text-amber-700 bg-amber-50",
+  add:        "text-emerald-700 bg-emerald-50",
+  remove:     "text-rose-700 bg-rose-50",
+  shipment:   "text-rose-700 bg-rose-50",
+  recount:    "text-amber-700 bg-amber-50",
   adjustment: "text-amber-700 bg-amber-50",
 }
 
@@ -30,7 +31,7 @@ const getSignedQuantity = (entry = {}) => {
 
 const getMovementLabel = (entry = {}) => {
   if (entry.type === "add") return `From: ${entry.source || "Unknown"}`
-  if (entry.type === "remove") return `To: ${entry.destination || "Unknown"}`
+  if (entry.type === "remove" || entry.type === "shipment") return `To: ${entry.destination || "Unknown"}`
   return "Recount/Adjustment"
 }
 
@@ -103,7 +104,7 @@ function StockHistory() {
                   </td>
                   <td className="px-3 py-2">
                     <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${typeStyleMap[entry?.type] || ""}`}>
-                      {entry?.type === "add" ? "Add" : entry?.type === "remove" ? "Remove" : "Recount"}
+                      {entry?.type === "add" ? "Add" : entry?.type === "shipment" ? "Shipment" : entry?.type === "remove" ? "Remove" : "Recount"}
                     </span>
                   </td>
                   <td className="px-3 py-2 text-right font-semibold text-slate-900 tabular-nums">

@@ -1,4 +1,4 @@
-﻿const pool = require("../config/db")
+const pool = require("../config/db")
 const supabase = require("../config/supabase")
 const { v4: uuidv4 } = require("crypto").randomUUID ? { v4: () => require("crypto").randomUUID() } : require("crypto")
 
@@ -36,7 +36,7 @@ const getInventoryEntries = async (req, res, next) => {
       values.push(Number(productId))
       where.push(`ie.product_id = $${values.length}`)
     }
-    if (type && ["add", "remove", "adjustment"].includes(type)) {
+    if (type && ["add", "remove", "adjustment", "shipment"].includes(type)) {
       values.push(type)
       where.push(`ie.type = $${values.length}`)
     }
@@ -52,7 +52,7 @@ const getInventoryEntries = async (req, res, next) => {
     const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : ""
 
     const countResult = await pool.query(
-      `SELECT COUNT(*)::int AS total FROM warehouse_entries ie ${whereSql}`,
+      `SELECT COUNT(*)::int AS total FROM inventory_entries ie ${whereSql}`,
       values
     )
     const total = countResult.rows[0]?.total || 0
@@ -70,8 +70,8 @@ const getInventoryEntries = async (req, res, next) => {
         ie.remarks,
         ie.images,
         ie.created_at
-       FROM warehouse_entries ie
-       JOIN warehouse_products p ON p.id = ie.product_id
+       FROM inventory_entries ie
+       JOIN products p ON p.id = ie.product_id
        ${whereSql}
        ORDER BY ie.created_at DESC
        LIMIT $${dataValues.length - 1}
@@ -98,14 +98,14 @@ const createInventoryEntry = async (req, res, next) => {
     if (!product_id || !type || !quantity) {
       return res.status(400).json({ message: "product_id, type and quantity are required." })
     }
-    if (!["add", "remove", "adjustment"].includes(type)) {
+    if (!["add", "remove", "adjustment", "shipment"].includes(type)) {
       return res.status(400).json({ message: "Invalid type." })
     }
     if (type === "add" && !source) {
       return res.status(400).json({ message: "source is required for add." })
     }
-    if (type === "remove" && !destination) {
-      return res.status(400).json({ message: "destination is required for remove." })
+    if ((type === "remove" || type === "shipment") && !destination) {
+      return res.status(400).json({ message: "destination is required for remove/shipment." })
     }
 
     // Upload all images to Supabase Storage, collect public URLs
@@ -120,7 +120,7 @@ const createInventoryEntry = async (req, res, next) => {
       await client.query("BEGIN")
 
       const productResult = await client.query(
-        "SELECT stock FROM warehouse_products WHERE id = $1 FOR UPDATE",
+        "SELECT stock FROM products WHERE id = $1 FOR UPDATE",
         [product_id]
       )
       if (!productResult.rows.length) {
@@ -135,12 +135,12 @@ const createInventoryEntry = async (req, res, next) => {
       if (type === "adjustment") nextStock = qty
 
       await client.query(
-        "UPDATE warehouse_products SET stock = $1 WHERE id = $2",
+        "UPDATE products SET stock = $1 WHERE id = $2",
         [nextStock, product_id]
       )
 
       const entryResult = await client.query(
-        `INSERT INTO warehouse_entries
+        `INSERT INTO inventory_entries
          (product_id, type, quantity, source, destination, remarks, images, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *`,
@@ -167,7 +167,7 @@ const deleteInventoryEntry = async (req, res, next) => {
 
     // Fetch the entry first to get images and reverse the stock change
     const entryResult = await pool.query(
-      "SELECT * FROM warehouse_entries WHERE id = $1",
+      "SELECT * FROM inventory_entries WHERE id = $1",
       [id]
     )
     if (!entryResult.rows.length) {
@@ -181,24 +181,24 @@ const deleteInventoryEntry = async (req, res, next) => {
 
       // Reverse the stock change caused by this entry
       const productResult = await client.query(
-        "SELECT stock FROM warehouse_products WHERE id = $1 FOR UPDATE",
+        "SELECT stock FROM products WHERE id = $1 FOR UPDATE",
         [entry.product_id]
       )
       if (productResult.rows.length) {
         let reversedStock = Number(productResult.rows[0].stock)
         const qty = Number(entry.quantity)
         if (entry.type === "add") reversedStock -= qty
-        if (entry.type === "remove") reversedStock += qty
+        if (entry.type === "remove" || entry.type === "shipment") reversedStock += qty
         // For "adjustment" we can't reliably reverse — skip stock change
         if (entry.type !== "adjustment") {
           await client.query(
-            "UPDATE warehouse_products SET stock = $1 WHERE id = $2",
+            "UPDATE products SET stock = $1 WHERE id = $2",
             [Math.max(0, reversedStock), entry.product_id]
           )
         }
       }
 
-      await client.query("DELETE FROM warehouse_entries WHERE id = $1", [id])
+      await client.query("DELETE FROM inventory_entries WHERE id = $1", [id])
       await client.query("COMMIT")
 
       // Delete images from Supabase Storage (best effort, don't fail if missing)
@@ -219,57 +219,19 @@ const deleteInventoryEntry = async (req, res, next) => {
   }
 }
 
-// Bulk remove: deducts multiple items in one transaction
-// Body: { deductions: [{name, quantity}], destination, remarks }
-// Corrugation box capacity per assembled product
-const CORRUGATION_CAPACITY = {
-  "ele ring silicone teether set": 200,
-  "kiko no drop teether":          115,
-  "cloth book set":                 28,
-  "newborn gift kit":               28,
-}
-
-// Determine which assembled product a deduction list represents
-// by checking if the deductions match a known product's items
-const PRODUCT_KEYS_BY_ITEMS = {
-  ele:     ["sage green teether", "aqua blue teether", "slate grey teether", "oat beige teether", "baby pink teether", "ele box", "ele thank you card", "potli"],
-  kiko:    ["sage green kiko teether", "cloud white kiko teether", "kiko box", "thank you card", "potli"],
-  cloth:   ["my first patterns book", "my first faces book", "my first puzzles book", "book kit sleeve", "book kit thank you card"],
-  newborn: ["flashcards", "ribbon", "cloth book", "banner", "gift kit sleeve", "gift kit thank you card"],
-}
-
-const PRODUCT_CAPACITY_BY_KEY = {
-  ele:     200,
-  kiko:    115,
-  cloth:   28,
-  newborn: 28,
-}
-
-function detectProductKey(deductions) {
-  const names = deductions.map((d) => d.name.toLowerCase())
-  for (const [key, items] of Object.entries(PRODUCT_KEYS_BY_ITEMS)) {
-    if (items.some((item) => names.includes(item))) return key
-  }
-  return null
-}
-
-// Get representative quantity (excludes multiplied items like Flashcards)
-function getRefQty(deductions) {
-  const nonMultiplied = deductions.filter(d => d.name.toLowerCase() !== "flashcards")
-  const source = nonMultiplied.length > 0 ? nonMultiplied : deductions
-  return Math.min(...source.map(d => Number(d.quantity)))
-}
-
-// Build the timestamp: use entry_date for date part, but NOW() for time
+// Build the timestamp: use entry_date for date part, current time for time-of-day
 function buildTimestamp(entry_date) {
   if (!entry_date) return new Date().toISOString()
-  // Combine selected date with current time so history shows correct time-of-day
   const now = new Date()
   const [y, m, d] = entry_date.split("-")
   return new Date(Number(y), Number(m) - 1, Number(d),
     now.getHours(), now.getMinutes(), now.getSeconds()).toISOString()
 }
 
+// Bulk shipment: deducts all items in the deductions array in one transaction.
+// The frontend computes the complete deductions list (including Blue Box / Ribbon).
+// Corrugation boxes are NOT deducted — they are tracked informally via remarks.
+// Body: { deductions: [{name, quantity}], destination, remarks, entry_date }
 const bulkRemoveInventory = async (req, res, next) => {
   try {
     let deductions = req.body.deductions
@@ -281,19 +243,8 @@ const bulkRemoveInventory = async (req, res, next) => {
     if (!deductions?.length) return res.status(400).json({ message: "deductions array is required." })
     if (!destination) return res.status(400).json({ message: "destination is required." })
 
-    const productKey = detectProductKey(deductions)
-    const refQty = getRefQty(deductions)
     const ts = buildTimestamp(entry_date)
 
-    // Pre-calculate corrugation boxes needed
-    const corrugationBoxes = productKey && PRODUCT_CAPACITY_BY_KEY[productKey]
-      ? Math.ceil(refQty / PRODUCT_CAPACITY_BY_KEY[productKey])
-      : 0
-
-    const needsBlueBox = productKey === "cloth" || productKey === "newborn"
-    const needsRibbon  = productKey === "newborn"
-
-    // Upload images
     const imageUrls = []
     for (const file of req.files || []) {
       const url = await uploadToSupabase(file)
@@ -304,102 +255,40 @@ const bulkRemoveInventory = async (req, res, next) => {
     try {
       await client.query("BEGIN")
 
-      // ── Validate all auto-deducted items BEFORE touching anything ──────────
-      if (corrugationBoxes > 0) {
-        const r = await client.query("SELECT stock FROM warehouse_products WHERE LOWER(name) = 'corrugation box'")
-        if (!r.rows.length) {
-          await client.query("ROLLBACK")
-          return res.status(404).json({ message: '"Corrugation Box" not found in inventory.' })
-        }
-        if (Number(r.rows[0].stock) < corrugationBoxes) {
-          await client.query("ROLLBACK")
-          return res.status(400).json({ message: `Insufficient Corrugation Box stock. Have: ${r.rows[0].stock}, Need: ${corrugationBoxes}` })
-        }
-      }
-      if (needsBlueBox) {
-        const r = await client.query("SELECT stock FROM warehouse_products WHERE LOWER(name) = 'blue box'")
-        if (!r.rows.length) {
-          await client.query("ROLLBACK")
-          return res.status(404).json({ message: '"Blue Box" not found in inventory. Add it via Admin first.' })
-        }
-        if (Number(r.rows[0].stock) < refQty) {
-          await client.query("ROLLBACK")
-          return res.status(400).json({ message: `Insufficient Blue Box stock. Have: ${r.rows[0].stock}, Need: ${refQty}` })
-        }
-      }
-      if (needsRibbon) {
-        const r = await client.query("SELECT stock FROM warehouse_products WHERE LOWER(name) = 'ribbon'")
-        if (!r.rows.length) {
-          await client.query("ROLLBACK")
-          return res.status(404).json({ message: '"Ribbon" not found in inventory. Add it via Admin first.' })
-        }
-        if (Number(r.rows[0].stock) < refQty) {
-          await client.query("ROLLBACK")
-          return res.status(400).json({ message: `Insufficient Ribbon stock. Have: ${r.rows[0].stock}m, Need: ${refQty}m` })
-        }
-      }
-
-      const results = []
-
-      // ── Deduct main items ──────────────────────────────────────────────────
-      for (let i = 0; i < deductions.length; i++) {
-        const { name, quantity } = deductions[i]
+      // Validate all items have sufficient stock before touching anything
+      for (const { name, quantity } of deductions) {
         const qty = Number(quantity)
         const pr = await client.query(
-          "SELECT id, stock FROM warehouse_products WHERE LOWER(name) = LOWER($1) FOR UPDATE", [name]
+          "SELECT id, stock FROM products WHERE LOWER(name) = LOWER($1)", [name]
         )
         if (!pr.rows.length) {
           await client.query("ROLLBACK")
           return res.status(404).json({ message: `Item not found: ${name}` })
         }
-        const newStock = Number(pr.rows[0].stock) - qty
-        if (newStock < 0) {
+        if (Number(pr.rows[0].stock) < qty) {
           await client.query("ROLLBACK")
-          return res.status(400).json({ message: `Insufficient stock for "${name}". Have: ${pr.rows[0].stock}, Need: ${qty}` })
+          return res.status(400).json({
+            message: `Insufficient stock for "${name}". Have: ${pr.rows[0].stock}, Need: ${qty}`,
+          })
         }
-        await client.query("UPDATE warehouse_products SET stock = $1 WHERE id = $2", [newStock, pr.rows[0].id])
+      }
+
+      const results = []
+
+      for (let i = 0; i < deductions.length; i++) {
+        const { name, quantity } = deductions[i]
+        const qty = Number(quantity)
+        const pr = await client.query(
+          "SELECT id, stock FROM products WHERE LOWER(name) = LOWER($1) FOR UPDATE", [name]
+        )
+        const newStock = Number(pr.rows[0].stock) - qty
+        await client.query("UPDATE products SET stock = $1 WHERE id = $2", [newStock, pr.rows[0].id])
         const entry = await client.query(
-          `INSERT INTO warehouse_entries (product_id, type, quantity, destination, remarks, images, created_at)
-           VALUES ($1, 'remove', $2, $3, $4, $5, $6) RETURNING *`,
+          `INSERT INTO inventory_entries (product_id, type, quantity, destination, remarks, images, created_at)
+           VALUES ($1, 'shipment', $2, $3, $4, $5, $6) RETURNING *`,
           [pr.rows[0].id, qty, destination, remarks || null, i === 0 ? imageUrls : [], ts]
         )
         results.push(entry.rows[0])
-      }
-
-      // ── Auto-deduct Corrugation Box ────────────────────────────────────────
-      if (corrugationBoxes > 0) {
-        const r = await client.query("SELECT id, stock FROM warehouse_products WHERE LOWER(name) = 'corrugation box' FOR UPDATE")
-        await client.query("UPDATE warehouse_products SET stock = $1 WHERE id = $2", [Number(r.rows[0].stock) - corrugationBoxes, r.rows[0].id])
-        const e = await client.query(
-          `INSERT INTO warehouse_entries (product_id, type, quantity, destination, remarks, images, created_at)
-           VALUES ($1, 'remove', $2, $3, $4, '{}', $5) RETURNING *`,
-          [r.rows[0].id, corrugationBoxes, destination, `Auto: corrugation for ${productKey}`, ts]
-        )
-        results.push(e.rows[0])
-      }
-
-      // ── Auto-deduct Blue Box ───────────────────────────────────────────────
-      if (needsBlueBox) {
-        const r = await client.query("SELECT id, stock FROM warehouse_products WHERE LOWER(name) = 'blue box' FOR UPDATE")
-        await client.query("UPDATE warehouse_products SET stock = $1 WHERE id = $2", [Number(r.rows[0].stock) - refQty, r.rows[0].id])
-        const e = await client.query(
-          `INSERT INTO warehouse_entries (product_id, type, quantity, destination, remarks, images, created_at)
-           VALUES ($1, 'remove', $2, $3, $4, '{}', $5) RETURNING *`,
-          [r.rows[0].id, refQty, destination, `Auto: blue box for ${productKey}`, ts]
-        )
-        results.push(e.rows[0])
-      }
-
-      // ── Auto-deduct Ribbon ─────────────────────────────────────────────────
-      if (needsRibbon) {
-        const r = await client.query("SELECT id, stock FROM warehouse_products WHERE LOWER(name) = 'ribbon' FOR UPDATE")
-        await client.query("UPDATE warehouse_products SET stock = $1 WHERE id = $2", [Number(r.rows[0].stock) - refQty, r.rows[0].id])
-        const e = await client.query(
-          `INSERT INTO warehouse_entries (product_id, type, quantity, destination, remarks, images, created_at)
-           VALUES ($1, 'remove', $2, $3, $4, '{}', $5) RETURNING *`,
-          [r.rows[0].id, refQty, destination, `Auto: ${refQty}m ribbon for newborn`, ts]
-        )
-        results.push(e.rows[0])
       }
 
       await client.query("COMMIT")
@@ -449,7 +338,7 @@ const bulkAddInventory = async (req, res, next) => {
         const qty = Number(quantity)
 
         const productResult = await client.query(
-          "SELECT id, stock FROM warehouse_products WHERE LOWER(name) = LOWER($1) FOR UPDATE",
+          "SELECT id, stock FROM products WHERE LOWER(name) = LOWER($1) FOR UPDATE",
           [name]
         )
         if (!productResult.rows.length) {
@@ -460,11 +349,11 @@ const bulkAddInventory = async (req, res, next) => {
         const product = productResult.rows[0]
         const newStock = Number(product.stock) + qty
 
-        await client.query("UPDATE warehouse_products SET stock = $1 WHERE id = $2", [newStock, product.id])
+        await client.query("UPDATE products SET stock = $1 WHERE id = $2", [newStock, product.id])
 
         const entryImages = i === 0 ? imageUrls : []
         const entry = await client.query(
-          `INSERT INTO warehouse_entries
+          `INSERT INTO inventory_entries
            (product_id, type, quantity, source, remarks, images, created_at)
            VALUES ($1, 'add', $2, $3, $4, $5, $6)
            RETURNING *`,
