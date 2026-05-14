@@ -6,9 +6,9 @@
 --   SELECT conname FROM pg_constraint WHERE conrelid = 'inventory_entries'::regclass AND contype = 'c';
 -- and replace below accordingly.
 
-ALTER TABLE inventory_entries
-  DROP CONSTRAINT IF EXISTS inventory_entries_type_check;
+ALTER TABLE warehouse_entries
+  DROP CONSTRAINT IF EXISTS warehouse_entries_type_check;
 
-ALTER TABLE inventory_entries
-  ADD CONSTRAINT inventory_entries_type_check
+ALTER TABLE warehouse_entries
+  ADD CONSTRAINT warehouse_entries_type_check
   CHECK (type IN ('add', 'remove', 'adjustment', 'shipment'));
