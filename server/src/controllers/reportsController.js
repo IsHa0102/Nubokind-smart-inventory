@@ -13,7 +13,7 @@ const getReportStats = async (req, res, next) => {
         SUM(stock) AS total_stock,
         COUNT(*) FILTER (WHERE stock = 0) AS out_of_stock,
         COUNT(*) FILTER (WHERE stock > 0 AND stock <= low_stock_threshold) AS low_stock
-      FROM warehouse_products
+      FROM products
       ${itemType ? `WHERE item_type = $1` : ""}
     `, itemType ? [itemType] : [])
 
@@ -25,8 +25,8 @@ const getReportStats = async (req, res, next) => {
         DATE(ie.created_at) AS date,
         SUM(CASE WHEN ie.type = 'add' THEN ie.quantity ELSE 0 END) AS added,
         SUM(CASE WHEN ie.type = 'remove' THEN ie.quantity ELSE 0 END) AS removed
-      FROM warehouse_entries ie
-      JOIN warehouse_products p ON p.id = ie.product_id
+      FROM inventory_entries ie
+      JOIN products p ON p.id = ie.product_id
       WHERE ie.created_at >= $1::date
         AND ie.created_at < ($2::date + interval '1 day')
         ${itemType ? "AND p.item_type = $3" : ""}
@@ -42,8 +42,8 @@ const getReportStats = async (req, res, next) => {
         p.stock AS current_stock,
         SUM(CASE WHEN ie.type = 'add' THEN ie.quantity ELSE 0 END) AS total_added,
         SUM(CASE WHEN ie.type = 'remove' THEN ie.quantity ELSE 0 END) AS total_removed
-      FROM warehouse_products p
-      LEFT JOIN warehouse_entries ie
+      FROM products p
+      LEFT JOIN inventory_entries ie
         ON ie.product_id = p.id
         AND ie.created_at >= $1::date
         AND ie.created_at < ($2::date + interval '1 day')
