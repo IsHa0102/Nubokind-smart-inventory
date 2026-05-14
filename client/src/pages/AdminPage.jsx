@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react"
 import { fetchDestinations, fetchManufacturers, fetchProducts } from "../api/inventoryApi"
-import { apiClient } from "../api/apiClient"
 import DestinationList from "../components/DestinationList"
 import ManufacturerList from "../components/ManufacturerList"
 import ProductList from "../components/ProductList"
@@ -18,13 +17,13 @@ function AdminLogin({ onSuccess }) {
     setError("")
     setLoading(true)
     try {
-      const { data } = await apiClient.post("/auth/admin", { password })
-      if (data.success) {
+      const correct = import.meta.env.VITE_ADMIN_PASSWORD
+      if (password === correct) {
         localStorage.setItem("isAdminAuthenticated", "true")
         onSuccess()
+      } else {
+        setError("Incorrect password.")
       }
-    } catch (err) {
-      setError(err?.response?.data?.message || "Incorrect password.")
     } finally {
       setLoading(false)
     }
