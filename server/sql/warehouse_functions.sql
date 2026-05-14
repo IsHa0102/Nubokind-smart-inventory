@@ -8,7 +8,7 @@ CREATE OR REPLACE FUNCTION _warehouse_build_ts(p_entry_date text)
 RETURNS timestamptz LANGUAGE sql AS $$
   SELECT CASE
     WHEN p_entry_date IS NOT NULL
-    THEN (p_entry_date || ' ' || to_char(CURRENT_TIME, 'HH24:MI:SS'))::timestamptz
+    THEN (p_entry_date || ' ' || to_char(NOW(), 'HH24:MI:SS'))::timestamptz
     ELSE now()
   END
 $$;
