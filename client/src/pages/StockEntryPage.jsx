@@ -133,13 +133,6 @@ const SHIPMENT_PRODUCTS = [
       { name: "Ribbon",   multiplier: 1 },
     ],
   },
-  {
-    key: "potli",
-    label: "Potli",
-    image: null,
-    variants: null,
-    fixedItems: ["Potli"],
-  },
 ]
 
 // Build deductions for a single shipment line (product + variant + qty).
