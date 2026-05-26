@@ -135,7 +135,7 @@ const SHIPMENT_PRODUCTS = [
   {
     key: "fb-combo",
     label: "Flashcard & Banner Combo",
-    image: null,
+    image: "https://res.cloudinary.com/dgqcdiyad/image/upload/q_auto/f_auto/v1779792238/Screenshot_2026-05-26_161340_laoeol.png",
     variants: null,
     fixedItems: [
       { name: "Flashcards", multiplier: 10 },
