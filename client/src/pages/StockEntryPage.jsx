@@ -39,15 +39,14 @@ const PRODUCT_CATALOGUE = [
       "Book Kit Sleeve", "Book Kit Thank You Card",
     ],
   },
-  {
-    key: "newborn",
-    label: "Newborn Gift Kit",
-    image: "https://res.cloudinary.com/dgqcdiyad/image/upload/f_auto,q_auto/montessori_kit_gysxiw",
-    items: [
-      "Flashcards", "Ribbon", "Cloth Book", "Banner",
-      "Gift Kit Sleeve", "Gift Kit Thank You Card",
-    ],
-  },
+  { key: "cloth-book-item",  label: "Cloth Book",                          image: null, items: ["Cloth Book"] },
+  { key: "flashcards-item",  label: "Flashcards",                          image: null, items: ["Flashcards"] },
+  { key: "banner-item",      label: "Banner",                              image: null, items: ["Banner"] },
+  { key: "ribbon-item",      label: "Ribbon",                              image: null, items: ["Ribbon"] },
+  { key: "gift-kit-sleeve",  label: "Gift Kit Sleeve",                     image: null, items: ["Gift Kit Sleeve"] },
+  { key: "gift-kit-tyc",     label: "Gift Kit Thank You Card",             image: null, items: ["Gift Kit Thank You Card"] },
+  { key: "fb-box",           label: "Flashcard & Banner Packaging Box",    image: null, items: ["Flashcard & Banner Packaging Box"] },
+  { key: "fb-tyc",           label: "Flashcard & Banner Thank You Card",   image: null, items: ["Flashcard & Banner Thank You Card"] },
   {
     key: "potli",
     label: "Potli",
@@ -131,6 +130,19 @@ const SHIPMENT_PRODUCTS = [
     autoDeducts: [
       { name: "Blue Box", multiplier: 1 },
       { name: "Ribbon",   multiplier: 1 },
+    ],
+  },
+  {
+    key: "fb-combo",
+    label: "Flashcard & Banner Combo",
+    image: null,
+    variants: null,
+    fixedItems: [
+      { name: "Flashcards", multiplier: 10 },
+      "Banner",
+      { name: "Ribbon", multiplier: 1 },
+      "Flashcard & Banner Thank You Card",
+      "Flashcard & Banner Packaging Box",
     ],
   },
 ]
