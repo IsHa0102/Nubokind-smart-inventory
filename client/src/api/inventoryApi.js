@@ -1,128 +1,274 @@
-import { apiClient } from "./apiClient"
+import { supabase } from "./supabaseClient"
 
-export const fetchDashboardStats = async () => {
-  const { data } = await apiClient.get("/dashboard/stats")
-  return data
+const BUCKET = "inventory-images"
+
+// ── Image upload ───────────────────────────────────────────────────────────
+async function uploadImage(file) {
+  const ext = file.name.split(".").pop()
+  const filename = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+  const { error } = await supabase.storage
+    .from(BUCKET)
+    .upload(filename, file, { contentType: file.type, upsert: false })
+  if (error) throw new Error(`Image upload failed: ${error.message}`)
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(filename)
+  return data.publicUrl
 }
 
-export const fetchStockMovement = async () => {
-  const { data } = await apiClient.get("/dashboard/stock-movement")
-  return data
+async function uploadImages(files = []) {
+  const urls = []
+  for (const file of files) urls.push(await uploadImage(file))
+  return urls
 }
 
+// ── Products ───────────────────────────────────────────────────────────────
 export const fetchProducts = async () => {
-  const { data } = await apiClient.get("/products")
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .order("id", { ascending: false })
+  if (error) throw new Error(error.message)
   return data
 }
 
-export const createProduct = async (payload) => {
-  const { data } = await apiClient.post("/products", payload)
+export const createProduct = async ({ name, stock, low_stock_threshold, item_type }) => {
+  const { data, error } = await supabase
+    .from("products")
+    .insert({ name, stock: Number(stock), low_stock_threshold: Number(low_stock_threshold), item_type })
+    .select()
+    .single()
+  if (error) {
+    if (error.code === "23505") throw new Error("A product with this name already exists.")
+    throw new Error(error.message)
+  }
   return data
-}
-
-export const fetchManufacturers = async () => {
-  const { data } = await apiClient.get("/manufacturers")
-  return data
-}
-
-export const createManufacturer = async (payload) => {
-  const { data } = await apiClient.post("/manufacturers", payload)
-  return data
-}
-
-export const updateManufacturer = async (id, payload) => {
-  const { data } = await apiClient.put(`/manufacturers/${id}`, payload)
-  return data
-}
-
-export const deleteManufacturer = async (id) => {
-  await apiClient.delete(`/manufacturers/${id}`)
-}
-
-export const fetchDestinations = async () => {
-  const { data } = await apiClient.get("/destinations")
-  return data
-}
-
-export const createDestination = async (payload) => {
-  const { data } = await apiClient.post("/destinations", payload)
-  return data
-}
-
-export const updateDestination = async (id, payload) => {
-  const { data } = await apiClient.put(`/destinations/${id}`, payload)
-  return data
-}
-
-export const deleteDestination = async (id) => {
-  await apiClient.delete(`/destinations/${id}`)
 }
 
 export const updateProduct = async (id, payload) => {
-  const { data } = await apiClient.put(`/products/${id}`, payload)
+  const { data, error } = await supabase
+    .from("products")
+    .update(payload)
+    .eq("id", id)
+    .select()
+    .single()
+  if (error) {
+    if (error.code === "23505") throw new Error("A product with this name already exists.")
+    throw new Error(error.message)
+  }
   return data
 }
 
 export const deleteProduct = async (id) => {
-  await apiClient.delete(`/products/${id}`)
+  const { count } = await supabase
+    .from("inventory_entries")
+    .select("id", { count: "exact", head: true })
+    .eq("product_id", id)
+  if (count > 0) throw new Error(`Cannot delete — this product has ${count} inventory entries.`)
+  const { error } = await supabase.from("products").delete().eq("id", id)
+  if (error) throw new Error(error.message)
 }
 
-export const createInventoryEntry = async (formData) => {
-  const { data } = await apiClient.post("/inventory-entries", formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-  })
+// ── Manufacturers ──────────────────────────────────────────────────────────
+export const fetchManufacturers = async () => {
+  const { data, error } = await supabase
+    .from("manufacturers")
+    .select("*")
+    .order("name", { ascending: true })
+  if (error) throw new Error(error.message)
   return data
 }
 
+export const createManufacturer = async ({ name }) => {
+  const { data, error } = await supabase
+    .from("manufacturers")
+    .insert({ name })
+    .select()
+    .single()
+  if (error) throw new Error(error.message)
+  return data
+}
+
+export const updateManufacturer = async (id, { name }) => {
+  const { data, error } = await supabase
+    .from("manufacturers")
+    .update({ name })
+    .eq("id", id)
+    .select()
+    .single()
+  if (error) throw new Error(error.message)
+  return data
+}
+
+export const deleteManufacturer = async (id) => {
+  const { data: mfr } = await supabase.from("manufacturers").select("name").eq("id", id).single()
+  if (!mfr) throw new Error("Manufacturer not found.")
+  const { count } = await supabase
+    .from("inventory_entries")
+    .select("id", { count: "exact", head: true })
+    .eq("source", mfr.name)
+  if (count > 0) throw new Error(`Cannot delete "${mfr.name}" — it is referenced in ${count} inventory entry/entries.`)
+  const { error } = await supabase.from("manufacturers").delete().eq("id", id)
+  if (error) throw new Error(error.message)
+}
+
+// ── Destinations ───────────────────────────────────────────────────────────
+export const fetchDestinations = async () => {
+  const { data, error } = await supabase
+    .from("destinations")
+    .select("*")
+    .order("name", { ascending: true })
+  if (error) throw new Error(error.message)
+  return data
+}
+
+export const createDestination = async ({ name }) => {
+  const { data, error } = await supabase
+    .from("destinations")
+    .insert({ name })
+    .select()
+    .single()
+  if (error) throw new Error(error.message)
+  return data
+}
+
+export const updateDestination = async (id, { name }) => {
+  const { data, error } = await supabase
+    .from("destinations")
+    .update({ name })
+    .eq("id", id)
+    .select()
+    .single()
+  if (error) throw new Error(error.message)
+  return data
+}
+
+export const deleteDestination = async (id) => {
+  const { data: dest } = await supabase.from("destinations").select("name").eq("id", id).single()
+  if (!dest) throw new Error("Destination not found.")
+  const { count } = await supabase
+    .from("inventory_entries")
+    .select("id", { count: "exact", head: true })
+    .eq("destination", dest.name)
+  if (count > 0) throw new Error(`Cannot delete "${dest.name}" — it is referenced in ${count} inventory entry/entries.`)
+  const { error } = await supabase.from("destinations").delete().eq("id", id)
+  if (error) throw new Error(error.message)
+}
+
+// ── Inventory entries ──────────────────────────────────────────────────────
 export const fetchInventoryEntries = async (params = {}) => {
-  const { data } = await apiClient.get("/inventory-entries", { params })
-  return data
+  const { page = 1, limit = 25, productId, type, from, to } = params
+  const offset = (page - 1) * limit
+
+  let query = supabase
+    .from("inventory_entries")
+    .select("*, products(name)", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1)
+
+  if (productId) query = query.eq("product_id", productId)
+  if (type) query = query.eq("type", type)
+  if (from) query = query.gte("created_at", from)
+  if (to) query = query.lte("created_at", `${to}T23:59:59+00:00`)
+
+  const { data, error, count } = await query
+  if (error) throw new Error(error.message)
+
+  const items = (data || []).map((e) => ({ ...e, product_name: e.products?.name }))
+  const total = count || 0
+  return {
+    items,
+    total,
+    page,
+    limit,
+    totalPages: Math.max(Math.ceil(total / limit), 1),
+  }
 }
 
 export const fetchRecentInventoryEntries = async (limit = 7) => {
-  const data = await fetchInventoryEntries({ page: 1, limit })
-  return data
+  return fetchInventoryEntries({ page: 1, limit })
 }
 
 export const deleteInventoryEntry = async (id) => {
-  await apiClient.delete(`/inventory-entries/${id}`)
+  const { error } = await supabase.rpc("delete_inventory_entry_rpc", { p_id: id })
+  if (error) throw new Error(error.message)
+  // Delete images from storage (best-effort — fetch the entry first)
 }
 
-export const bulkRemoveInventory = async ({ deductions, destination, remarks, images = [], entry_date }) => {
-  if (images.length > 0) {
-    const formData = new FormData()
-    formData.append("deductions", JSON.stringify(deductions))
-    formData.append("destination", destination)
-    if (remarks) formData.append("remarks", remarks)
-    if (entry_date) formData.append("entry_date", entry_date)
-    images.forEach((img) => formData.append("images", img))
-    const { data } = await apiClient.post("/inventory-entries/bulk-remove", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    })
-    return data
-  }
-  const { data } = await apiClient.post("/inventory-entries/bulk-remove", { deductions, destination, remarks, entry_date })
+export const createInventoryEntry = async (formData) => {
+  const product_id = formData.get("product_id")
+  const type = formData.get("type")
+  const quantity = formData.get("quantity")
+  const source = formData.get("source") || null
+  const destination = formData.get("destination") || null
+  const remarks = formData.get("remarks") || null
+  const entry_date = formData.get("entry_date") || null
+  const imageFiles = formData.getAll("images")
+
+  const imageUrls = await uploadImages(imageFiles)
+
+  const { data, error } = await supabase.rpc("create_inventory_entry_rpc", {
+    p_product_id: Number(product_id),
+    p_type: type,
+    p_quantity: Number(quantity),
+    p_source: source,
+    p_destination: destination,
+    p_remarks: remarks,
+    p_entry_date: entry_date,
+    p_image_urls: imageUrls,
+  })
+  if (error) throw new Error(error.message)
   return data
 }
 
-export const fetchReportStats = async (params = {}) => {
-  const { data } = await apiClient.get("/reports/stats", { params })
+// ── Bulk operations ────────────────────────────────────────────────────────
+export const bulkRemoveInventory = async ({ deductions, destination, remarks, images = [], entry_date }) => {
+  const imageUrls = await uploadImages(images)
+  const { data, error } = await supabase.rpc("bulk_remove_inventory", {
+    p_deductions: deductions,
+    p_destination: destination,
+    p_remarks: remarks || null,
+    p_entry_date: entry_date || null,
+    p_image_urls: imageUrls,
+  })
+  if (error) throw new Error(error.message)
   return data
 }
 
 export const bulkAddInventory = async ({ additions, source, remarks, images = [], entry_date }) => {
-  if (images.length > 0) {
-    const formData = new FormData()
-    formData.append("additions", JSON.stringify(additions))
-    formData.append("source", source)
-    if (remarks) formData.append("remarks", remarks)
-    if (entry_date) formData.append("entry_date", entry_date)
-    images.forEach((img) => formData.append("images", img))
-    const { data } = await apiClient.post("/inventory-entries/bulk-add", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    })
-    return data
-  }
-  const { data } = await apiClient.post("/inventory-entries/bulk-add", { additions, source, remarks, entry_date })
+  const imageUrls = await uploadImages(images)
+  const { data, error } = await supabase.rpc("bulk_add_inventory", {
+    p_additions: additions,
+    p_source: source,
+    p_remarks: remarks || null,
+    p_entry_date: entry_date || null,
+    p_image_urls: imageUrls,
+  })
+  if (error) throw new Error(error.message)
+  return data
+}
+
+// ── Dashboard ──────────────────────────────────────────────────────────────
+export const fetchDashboardStats = async () => {
+  const { data, error } = await supabase.rpc("get_dashboard_stats")
+  if (error) throw new Error(error.message)
+  return data
+}
+
+export const fetchStockMovement = async () => {
+  const { data, error } = await supabase.rpc("get_stock_movement")
+  if (error) throw new Error(error.message)
+  return data
+}
+
+// ── Reports ────────────────────────────────────────────────────────────────
+export const fetchReportStats = async (params = {}) => {
+  const { from, to, itemType } = params
+  const today = new Date().toISOString().split("T")[0]
+  const daysAgo30 = new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0]
+  const { data, error } = await supabase.rpc("get_report_stats", {
+    p_from: from || daysAgo30,
+    p_to: to || today,
+    p_item_type: itemType || null,
+  })
+  if (error) throw new Error(error.message)
   return data
 }
