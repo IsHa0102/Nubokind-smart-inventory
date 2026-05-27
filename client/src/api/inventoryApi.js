@@ -218,11 +218,27 @@ export const createInventoryEntry = async (formData) => {
   return data
 }
 
+// ── Name → ID resolution helper ───────────────────────────────────────────
+async function resolveNamesToIds(items) {
+  const { data, error } = await supabase.from("warehouse_products").select("id, name")
+  if (error) throw new Error(error.message)
+  const nameToId = {}
+  data.forEach((p) => { nameToId[p.name.toLowerCase()] = p.id })
+  return items.map(({ name, quantity }) => {
+    const product_id = nameToId[name.toLowerCase()]
+    if (!product_id) throw new Error(`Product "${name}" not found in inventory.`)
+    return { product_id, quantity }
+  })
+}
+
 // ── Bulk operations ────────────────────────────────────────────────────────
 export const bulkRemoveInventory = async ({ deductions, destination, remarks, images = [], entry_date }) => {
-  const imageUrls = await uploadImages(images)
+  const [imageUrls, dedWithIds] = await Promise.all([
+    uploadImages(images),
+    resolveNamesToIds(deductions),
+  ])
   const { data, error } = await supabase.rpc("bulk_remove_by_id", {
-    p_deductions: deductions,
+    p_deductions: dedWithIds,
     p_destination: destination,
     p_remarks: remarks || null,
     p_entry_date: entry_date || null,
@@ -233,9 +249,12 @@ export const bulkRemoveInventory = async ({ deductions, destination, remarks, im
 }
 
 export const bulkAddInventory = async ({ additions, source, remarks, images = [], entry_date }) => {
-  const imageUrls = await uploadImages(images)
+  const [imageUrls, addWithIds] = await Promise.all([
+    uploadImages(images),
+    resolveNamesToIds(additions),
+  ])
   const { data, error } = await supabase.rpc("bulk_add_by_id", {
-    p_additions: additions,
+    p_additions: addWithIds,
     p_source: source,
     p_remarks: remarks || null,
     p_entry_date: entry_date || null,
