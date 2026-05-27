@@ -16,14 +16,17 @@ function AdminLogin({ onSuccess }) {
     e.preventDefault()
     setError("")
     setLoading(true)
-    const correct = import.meta.env.VITE_ADMIN_PASSWORD
-    if (password === correct) {
-      localStorage.setItem("isAdminAuthenticated", "true")
-      onSuccess()
-    } else {
-      setError("Incorrect password.")
+    try {
+      const correct = import.meta.env.VITE_ADMIN_PASSWORD
+      if (password === correct) {
+        localStorage.setItem("isAdminAuthenticated", "true")
+        onSuccess()
+      } else {
+        setError("Incorrect password.")
+      }
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   return (
