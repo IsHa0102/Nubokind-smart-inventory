@@ -23,7 +23,7 @@ async function uploadImages(files = []) {
 // ── Products ───────────────────────────────────────────────────────────────
 export const fetchProducts = async () => {
   const { data, error } = await supabase
-    .from("products")
+    .from("warehouse_products")
     .select("*")
     .order("id", { ascending: false })
   if (error) throw new Error(error.message)
@@ -32,7 +32,7 @@ export const fetchProducts = async () => {
 
 export const createProduct = async ({ name, stock, low_stock_threshold, item_type }) => {
   const { data, error } = await supabase
-    .from("products")
+    .from("warehouse_products")
     .insert({ name, stock: Number(stock), low_stock_threshold: Number(low_stock_threshold), item_type })
     .select()
     .single()
@@ -45,7 +45,7 @@ export const createProduct = async ({ name, stock, low_stock_threshold, item_typ
 
 export const updateProduct = async (id, payload) => {
   const { data, error } = await supabase
-    .from("products")
+    .from("warehouse_products")
     .update(payload)
     .eq("id", id)
     .select()
@@ -59,11 +59,11 @@ export const updateProduct = async (id, payload) => {
 
 export const deleteProduct = async (id) => {
   const { count } = await supabase
-    .from("inventory_entries")
+    .from("warehouse_entries")
     .select("id", { count: "exact", head: true })
     .eq("product_id", id)
   if (count > 0) throw new Error(`Cannot delete — this product has ${count} inventory entries.`)
-  const { error } = await supabase.from("products").delete().eq("id", id)
+  const { error } = await supabase.from("warehouse_products").delete().eq("id", id)
   if (error) throw new Error(error.message)
 }
 
@@ -102,7 +102,7 @@ export const deleteManufacturer = async (id) => {
   const { data: mfr } = await supabase.from("manufacturers").select("name").eq("id", id).single()
   if (!mfr) throw new Error("Manufacturer not found.")
   const { count } = await supabase
-    .from("inventory_entries")
+    .from("warehouse_entries")
     .select("id", { count: "exact", head: true })
     .eq("source", mfr.name)
   if (count > 0) throw new Error(`Cannot delete "${mfr.name}" — it is referenced in ${count} inventory entry/entries.`)
@@ -145,7 +145,7 @@ export const deleteDestination = async (id) => {
   const { data: dest } = await supabase.from("destinations").select("name").eq("id", id).single()
   if (!dest) throw new Error("Destination not found.")
   const { count } = await supabase
-    .from("inventory_entries")
+    .from("warehouse_entries")
     .select("id", { count: "exact", head: true })
     .eq("destination", dest.name)
   if (count > 0) throw new Error(`Cannot delete "${dest.name}" — it is referenced in ${count} inventory entry/entries.`)
@@ -159,8 +159,8 @@ export const fetchInventoryEntries = async (params = {}) => {
   const offset = (page - 1) * limit
 
   let query = supabase
-    .from("inventory_entries")
-    .select("*, products(name)", { count: "exact" })
+    .from("warehouse_entries")
+    .select("*, warehouse_products(name)", { count: "exact" })
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1)
 
@@ -172,7 +172,7 @@ export const fetchInventoryEntries = async (params = {}) => {
   const { data, error, count } = await query
   if (error) throw new Error(error.message)
 
-  const items = (data || []).map((e) => ({ ...e, product_name: e.products?.name }))
+  const items = (data || []).map((e) => ({ ...e, product_name: e.warehouse_products?.name }))
   const total = count || 0
   return {
     items,
@@ -188,9 +188,8 @@ export const fetchRecentInventoryEntries = async (limit = 7) => {
 }
 
 export const deleteInventoryEntry = async (id) => {
-  const { error } = await supabase.rpc("delete_inventory_entry_rpc", { p_id: id })
+  const { error } = await supabase.rpc("warehouse_delete_entry", { p_entry_id: id })
   if (error) throw new Error(error.message)
-  // Delete images from storage (best-effort — fetch the entry first)
 }
 
 export const createInventoryEntry = async (formData) => {
@@ -205,7 +204,7 @@ export const createInventoryEntry = async (formData) => {
 
   const imageUrls = await uploadImages(imageFiles)
 
-  const { data, error } = await supabase.rpc("create_inventory_entry_rpc", {
+  const { data, error } = await supabase.rpc("warehouse_single_entry", {
     p_product_id: Number(product_id),
     p_type: type,
     p_quantity: Number(quantity),
@@ -222,7 +221,7 @@ export const createInventoryEntry = async (formData) => {
 // ── Bulk operations ────────────────────────────────────────────────────────
 export const bulkRemoveInventory = async ({ deductions, destination, remarks, images = [], entry_date }) => {
   const imageUrls = await uploadImages(images)
-  const { data, error } = await supabase.rpc("bulk_remove_inventory", {
+  const { data, error } = await supabase.rpc("bulk_remove_by_id", {
     p_deductions: deductions,
     p_destination: destination,
     p_remarks: remarks || null,
@@ -235,7 +234,7 @@ export const bulkRemoveInventory = async ({ deductions, destination, remarks, im
 
 export const bulkAddInventory = async ({ additions, source, remarks, images = [], entry_date }) => {
   const imageUrls = await uploadImages(images)
-  const { data, error } = await supabase.rpc("bulk_add_inventory", {
+  const { data, error } = await supabase.rpc("bulk_add_by_id", {
     p_additions: additions,
     p_source: source,
     p_remarks: remarks || null,
@@ -264,7 +263,7 @@ export const fetchReportStats = async (params = {}) => {
   const { from, to, itemType } = params
   const today = new Date().toISOString().split("T")[0]
   const daysAgo30 = new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0]
-  const { data, error } = await supabase.rpc("get_report_stats", {
+  const { data, error } = await supabase.rpc("warehouse_report_stats", {
     p_from: from || daysAgo30,
     p_to: to || today,
     p_item_type: itemType || null,
