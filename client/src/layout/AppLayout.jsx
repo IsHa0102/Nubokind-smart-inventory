@@ -14,7 +14,7 @@ function AppLayout() {
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
-            <img src="/nubo-logo.png" alt="Nübo" className="h-9 w-auto rounded-lg" />
+            <img src="https://res.cloudinary.com/dgqcdiyad/image/upload/q_auto/f_auto/v1779892935/nubo_logo_yellow_bg_t1rxsk.png" alt="Nübo" className="h-9 w-auto rounded-lg" />
             <h1 className="text-lg font-bold text-slate-900 sm:text-xl">Nubokind Smart Inventory System</h1>
           </div>
           <nav className="flex w-full gap-2 overflow-x-auto pb-1 lg:w-auto lg:flex-wrap lg:justify-end lg:overflow-visible lg:pb-0">
