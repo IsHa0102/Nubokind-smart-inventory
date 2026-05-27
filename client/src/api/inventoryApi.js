@@ -70,7 +70,7 @@ export const deleteProduct = async (id) => {
 // ── Manufacturers ──────────────────────────────────────────────────────────
 export const fetchManufacturers = async () => {
   const { data, error } = await supabase
-    .from("manufacturers")
+    .from("warehouse_manufacturers")
     .select("*")
     .order("name", { ascending: true })
   if (error) throw new Error(error.message)
@@ -79,7 +79,7 @@ export const fetchManufacturers = async () => {
 
 export const createManufacturer = async ({ name }) => {
   const { data, error } = await supabase
-    .from("manufacturers")
+    .from("warehouse_manufacturers")
     .insert({ name })
     .select()
     .single()
@@ -89,7 +89,7 @@ export const createManufacturer = async ({ name }) => {
 
 export const updateManufacturer = async (id, { name }) => {
   const { data, error } = await supabase
-    .from("manufacturers")
+    .from("warehouse_manufacturers")
     .update({ name })
     .eq("id", id)
     .select()
@@ -99,21 +99,21 @@ export const updateManufacturer = async (id, { name }) => {
 }
 
 export const deleteManufacturer = async (id) => {
-  const { data: mfr } = await supabase.from("manufacturers").select("name").eq("id", id).single()
+  const { data: mfr } = await supabase.from("warehouse_manufacturers").select("name").eq("id", id).single()
   if (!mfr) throw new Error("Manufacturer not found.")
   const { count } = await supabase
     .from("warehouse_entries")
     .select("id", { count: "exact", head: true })
     .eq("source", mfr.name)
   if (count > 0) throw new Error(`Cannot delete "${mfr.name}" — it is referenced in ${count} inventory entry/entries.`)
-  const { error } = await supabase.from("manufacturers").delete().eq("id", id)
+  const { error } = await supabase.from("warehouse_manufacturers").delete().eq("id", id)
   if (error) throw new Error(error.message)
 }
 
 // ── Destinations ───────────────────────────────────────────────────────────
 export const fetchDestinations = async () => {
   const { data, error } = await supabase
-    .from("destinations")
+    .from("warehouse_destinations")
     .select("*")
     .order("name", { ascending: true })
   if (error) throw new Error(error.message)
@@ -122,7 +122,7 @@ export const fetchDestinations = async () => {
 
 export const createDestination = async ({ name }) => {
   const { data, error } = await supabase
-    .from("destinations")
+    .from("warehouse_destinations")
     .insert({ name })
     .select()
     .single()
@@ -132,7 +132,7 @@ export const createDestination = async ({ name }) => {
 
 export const updateDestination = async (id, { name }) => {
   const { data, error } = await supabase
-    .from("destinations")
+    .from("warehouse_destinations")
     .update({ name })
     .eq("id", id)
     .select()
@@ -142,14 +142,14 @@ export const updateDestination = async (id, { name }) => {
 }
 
 export const deleteDestination = async (id) => {
-  const { data: dest } = await supabase.from("destinations").select("name").eq("id", id).single()
+  const { data: dest } = await supabase.from("warehouse_destinations").select("name").eq("id", id).single()
   if (!dest) throw new Error("Destination not found.")
   const { count } = await supabase
     .from("warehouse_entries")
     .select("id", { count: "exact", head: true })
     .eq("destination", dest.name)
   if (count > 0) throw new Error(`Cannot delete "${dest.name}" — it is referenced in ${count} inventory entry/entries.`)
-  const { error } = await supabase.from("destinations").delete().eq("id", id)
+  const { error } = await supabase.from("warehouse_destinations").delete().eq("id", id)
   if (error) throw new Error(error.message)
 }
 
