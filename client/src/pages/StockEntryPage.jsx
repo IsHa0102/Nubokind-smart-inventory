@@ -663,7 +663,13 @@ function ShipmentFlow({ destinations }) {
       setImagePreviews([])
       setFileInputKey((k) => k + 1)
     } catch (err) {
-      setMessage(err?.response?.data?.message || "Failed to record shipment. Please try again.")
+      console.error("[Shipment error]", err?.response?.status, err?.response?.data)
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        err?.message ||
+        "Failed to record shipment. Please try again."
+      setMessage(msg)
     } finally {
       setSubmitting(false)
     }
