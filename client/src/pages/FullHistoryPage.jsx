@@ -258,7 +258,7 @@ function FullHistoryPage() {
                       <td className="border-r border-slate-200 px-3 py-1.5 text-xs text-slate-500 whitespace-nowrap tabular-nums">
                         {formatDate(entry.created_at)}
                       </td>
-                      <td className="border-r border-slate-200 px-3 py-1.5 font-medium text-slate-900 whitespace-nowrap max-w-[140px] truncate">
+                      <td className="border-r border-slate-200 px-3 py-1.5 font-medium text-slate-900 min-w-[160px]">
                         {entry.product_name}
                       </td>
                       <td className="border-r border-slate-200 px-3 py-1.5">
