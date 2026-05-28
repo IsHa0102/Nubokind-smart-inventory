@@ -229,6 +229,8 @@ function FullHistoryPage() {
                   <th className="border-r border-slate-200 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 whitespace-nowrap">Item Name</th>
                   <th className="border-r border-slate-200 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 whitespace-nowrap">Type</th>
                   <th className="border-r border-slate-200 px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-600 whitespace-nowrap">Qty</th>
+                  <th className="border-r border-slate-200 px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-600 whitespace-nowrap">Before</th>
+                  <th className="border-r border-slate-200 px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-600 whitespace-nowrap">After</th>
                   <th className="border-r border-slate-200 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 whitespace-nowrap">From</th>
                   <th className="border-r border-slate-200 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 whitespace-nowrap">To</th>
                   <th className="border-r border-slate-200 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 whitespace-nowrap">Remarks</th>
@@ -266,6 +268,12 @@ function FullHistoryPage() {
                       </td>
                       <td className="border-r border-slate-200 px-3 py-1.5 text-right tabular-nums font-semibold text-slate-800 whitespace-nowrap">
                         {qty}
+                      </td>
+                      <td className="border-r border-slate-200 px-3 py-1.5 text-right tabular-nums text-xs text-slate-500 whitespace-nowrap">
+                        {entry.stock_before ?? <span className="text-slate-300">—</span>}
+                      </td>
+                      <td className="border-r border-slate-200 px-3 py-1.5 text-right tabular-nums text-xs font-medium text-slate-700 whitespace-nowrap">
+                        {entry.stock_after ?? <span className="text-slate-300">—</span>}
                       </td>
                       <td className="border-r border-slate-200 px-3 py-1.5 text-xs text-slate-600 whitespace-nowrap">
                         {entry.source || <span className="text-slate-300">—</span>}
