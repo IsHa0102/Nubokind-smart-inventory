@@ -820,9 +820,9 @@ function ShipmentFlow({ destinations }) {
           {/* Deductions preview */}
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
             <p className="mb-3 text-sm font-semibold text-amber-800">This will deduct from inventory:</p>
-            <div className="grid gap-1.5">
+            <div className="divide-y divide-amber-200 border border-amber-200 rounded-lg overflow-hidden">
               {fullDeductions.map((d, i) => (
-                <div key={i} className="flex items-center justify-between text-sm">
+                <div key={i} className="flex items-center justify-between px-3 py-2 text-sm bg-white even:bg-amber-50">
                   <span className="text-slate-700">{d.name}</span>
                   <span className="font-semibold text-rose-600">− {d.quantity}</span>
                 </div>
