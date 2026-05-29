@@ -32,7 +32,7 @@ const PRODUCT_CATALOGUE = [
   },
   {
     key: "cloth",
-    label: "Cloth Book Set",
+    label: "HIGH CONTRAST BOOKSET",
     image: "https://res.cloudinary.com/dgqcdiyad/image/upload/f_auto,q_auto/cloth_book_uu9rnk",
     items: [
       "My First Patterns Book", "My First Faces Book", "My First Puzzles Book",
@@ -111,7 +111,7 @@ const SHIPMENT_PRODUCTS = [
   },
   {
     key: "cloth",
-    label: "Cloth Book Set",
+    label: "HIGH CONTRAST BOOKSET",
     image: "https://res.cloudinary.com/dgqcdiyad/image/upload/f_auto,q_auto/cloth_book_uu9rnk",
     variants: null,
     fixedItems: [
@@ -122,7 +122,7 @@ const SHIPMENT_PRODUCTS = [
   },
   {
     key: "newborn",
-    label: "Newborn Gift Kit",
+    label: "HIGH CONTRAST SENSORY KIT",
     image: "https://res.cloudinary.com/dgqcdiyad/image/upload/f_auto,q_auto/montessori_kit_gysxiw",
     variants: null,
     fixedItems: [
@@ -145,7 +145,7 @@ const SHIPMENT_PRODUCTS = [
   },
   {
     key: "fb-combo",
-    label: "Flashcard & Banner Combo",
+    label: "HIGH CONTRAST FLASHCARD KIT",
     image: "https://res.cloudinary.com/dgqcdiyad/image/upload/q_auto/f_auto/v1779792238/Screenshot_2026-05-26_161340_laoeol.png",
     variants: null,
     fixedItems: [
