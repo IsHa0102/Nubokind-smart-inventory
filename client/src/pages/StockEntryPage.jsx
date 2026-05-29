@@ -39,7 +39,7 @@ const PRODUCT_CATALOGUE = [
       "Book Kit Sleeve", "Book Kit Thank You Card",
     ],
   },
-  { key: "cloth-book-item",  label: "Cloth Book",                          image: "https://res.cloudinary.com/dgqcdiyad/image/upload/q_auto/f_auto/v1779791651/Screenshot_2026-05-26_160139_mnb1vn.png",  items: ["Cloth Book"] },
+  { key: "cloth-book-item",  label: "My First Book",                          image: "https://res.cloudinary.com/dgqcdiyad/image/upload/q_auto/f_auto/v1779791651/Screenshot_2026-05-26_160139_mnb1vn.png",  items: ["My First Book"] },
   { key: "flashcards-item",  label: "Flashcards",                          image: "https://res.cloudinary.com/dgqcdiyad/image/upload/q_auto/f_auto/v1779791741/Screenshot_2026-05-26_160204_oybf6b.png",  items: ["Flashcards"] },
   { key: "banner-item",      label: "Banner",                              image: "https://res.cloudinary.com/dgqcdiyad/image/upload/q_auto/f_auto/v1779791776/Screenshot_2026-05-26_160213_mhblmx.png",  items: ["Banner"] },
   { key: "ribbon-item",      label: "Ribbon",                              image: "https://res.cloudinary.com/dgqcdiyad/image/upload/q_auto/f_auto/v1779791854/Screenshot_2026-05-26_160245_lwbfg3.png",  items: ["Ribbon"] },
@@ -127,7 +127,7 @@ const SHIPMENT_PRODUCTS = [
     variants: null,
     fixedItems: [
       { name: "Flashcards", multiplier: 10 },
-      "Cloth Book", "Banner",
+      "My First Book", "Banner",
       "Gift Kit Sleeve", "Gift Kit Thank You Card",
     ],
     autoDeducts: [
