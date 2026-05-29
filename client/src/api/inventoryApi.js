@@ -277,6 +277,23 @@ export const fetchStockMovement = async () => {
   return data
 }
 
+// ── Master Sheet ───────────────────────────────────────────────────────────
+export const fetchMasterSheet = async () => {
+  const { data, error } = await supabase.from("warehouse_master_sheet").select("*")
+  if (error) throw new Error(error.message)
+  return data || []
+}
+
+export const upsertMasterSheetRow = async (product_code, selling_price, stock) => {
+  const { error } = await supabase
+    .from("warehouse_master_sheet")
+    .upsert(
+      { product_code, selling_price, stock, updated_at: new Date().toISOString() },
+      { onConflict: "product_code" }
+    )
+  if (error) throw new Error(error.message)
+}
+
 // ── Reports ────────────────────────────────────────────────────────────────
 export const fetchReportStats = async (params = {}) => {
   const { from, to, itemType } = params

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { fetchDestinations, fetchManufacturers, fetchProducts } from "../api/inventoryApi"
+import { fetchDestinations, fetchManufacturers, fetchMasterSheet, fetchProducts, upsertMasterSheetRow } from "../api/inventoryApi"
 import DestinationList from "../components/DestinationList"
 import ManufacturerList from "../components/ManufacturerList"
 import ProductList from "../components/ProductList"
@@ -89,6 +89,133 @@ function AdminLogin({ onSuccess }) {
   )
 }
 
+// ── Master Sheet ───────────────────────────────────────────────────────────
+const MASTER_PRODUCTS = [
+  { name: "Ele Teether Blue Green",       code: "TE-EL-BL-GR-2" },
+  { name: "Ele Teether Green Grey",       code: "TE-EL-GR-GY-2" },
+  { name: "Ele Teether Beige Pink",       code: "TE-EL-BE-PI-2" },
+  { name: "Ele Teether Beige Blue",       code: "TE-EL-BE-BL-2" },
+  { name: "Ele Teether Blue Pink",        code: "TE-EL-BL-PI-2" },
+  { name: "Ele Teether Beige Green",      code: "TE-EL-BE-GR-2" },
+  { name: "Ele Teether Green Pink",       code: "TE-EL-GR-PI-2" },
+  { name: "Kiko Teether Green",           code: "TE-KI-GR-1"    },
+  { name: "Kiko Teether White",           code: "TE-KI-WH-1"    },
+  { name: "High Contrast Bookset",        code: "BO-HC-3"        },
+  { name: "High Contrast Sensory Kit",    code: "SK-HC-3"        },
+  { name: "High Contrast Flashcard Kit",  code: "FK-HC-2"        },
+]
+
+function MasterSheet({ addToast }) {
+  const [rows, setRows] = useState(() =>
+    MASTER_PRODUCTS.map((p) => ({ ...p, sellingPrice: "", stock: "" }))
+  )
+
+  useEffect(() => {
+    fetchMasterSheet()
+      .then((data) => {
+        const map = {}
+        data.forEach((r) => { map[r.product_code] = r })
+        setRows(MASTER_PRODUCTS.map((p) => ({
+          ...p,
+          sellingPrice: map[p.code]?.selling_price ?? "",
+          stock:        map[p.code]?.stock         ?? "",
+        })))
+      })
+      .catch(() => {})
+  }, [])
+
+  const updateRow = (code, field, value) => {
+    setRows((prev) => prev.map((r) => r.code === code ? { ...r, [field]: value } : r))
+  }
+
+  const saveRow = async (row) => {
+    const price = row.sellingPrice === "" ? null : Number(row.sellingPrice)
+    const stock = row.stock        === "" ? null : Number(row.stock)
+    try {
+      await upsertMasterSheetRow(row.code, price, stock)
+    } catch {
+      addToast("error", `Failed to save ${row.name}`)
+    }
+  }
+
+  const downloadCSV = () => {
+    const header = ["Master Product Name", "Master Product ID", "Selling Price", "Stock"]
+    const csvRows = rows.map((r) => [
+      `"${r.name}"`, `"${r.code}"`,
+      r.sellingPrice === "" ? "" : r.sellingPrice,
+      r.stock        === "" ? "" : r.stock,
+    ])
+    const csv = [header, ...csvRows].map((r) => r.join(",")).join("\n")
+    const blob = new Blob([csv], { type: "text/csv" })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement("a")
+    a.href     = url
+    a.download = `master_sheet_${new Date().toISOString().split("T")[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-slate-900">Master Sheet</h3>
+        <button
+          onClick={downloadCSV}
+          className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+        >
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          Download CSV
+        </button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <th className="px-4 py-3 text-left">Master Product Name</th>
+              <th className="px-4 py-3 text-left">Master Product ID</th>
+              <th className="px-4 py-3 text-left">Selling Price (₹)</th>
+              <th className="px-4 py-3 text-left">Stock</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.code} className="border-t border-slate-100 hover:bg-slate-50">
+                <td className="px-4 py-2.5 font-medium text-slate-900">{row.name}</td>
+                <td className="px-4 py-2.5 font-mono text-xs text-slate-500">{row.code}</td>
+                <td className="px-4 py-2.5">
+                  <input
+                    type="number"
+                    min="0"
+                    value={row.sellingPrice}
+                    onChange={(e) => updateRow(row.code, "sellingPrice", e.target.value)}
+                    onBlur={() => saveRow(row)}
+                    placeholder="e.g. 499"
+                    className="w-28 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                  />
+                </td>
+                <td className="px-4 py-2.5">
+                  <input
+                    type="number"
+                    min="0"
+                    value={row.stock}
+                    onChange={(e) => updateRow(row.code, "stock", e.target.value)}
+                    onBlur={() => saveRow(row)}
+                    placeholder="e.g. 50"
+                    className="w-24 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 // ── Admin page ─────────────────────────────────────────────────────────────
 function AdminContent() {
   const [products, setProducts] = useState([])
@@ -160,6 +287,7 @@ function AdminContent() {
           <DestinationList destinations={destinations} onRefresh={loadData} addToast={addToast} search={destSearch} />
         </div>
       </div>
+      <MasterSheet addToast={addToast} />
       <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>
   )
