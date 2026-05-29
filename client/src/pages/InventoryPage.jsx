@@ -63,7 +63,18 @@ function InventoryPage() {
   }, [])
 
   const productItems   = products.filter((p) => p.item_type !== "Packaging")
-  const packagingItems = products.filter((p) => p.item_type === "Packaging")
+
+  function packagingOrder(name) {
+    if (name.toLowerCase().includes("thank you card")) return 0
+    if (name.toLowerCase().includes("sleeve"))         return 1
+    if (name.toLowerCase() === "potli")                return 2
+    if (name.toLowerCase().includes("box"))            return 3
+    return 4
+  }
+
+  const packagingItems = products
+    .filter((p) => p.item_type === "Packaging")
+    .sort((a, b) => packagingOrder(a.name) - packagingOrder(b.name))
 
   return (
     <div className="space-y-8">
