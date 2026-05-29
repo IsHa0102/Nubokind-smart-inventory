@@ -43,10 +43,10 @@ const PRODUCT_CATALOGUE = [
   { key: "flashcards-item",  label: "Flashcards",                          image: "https://res.cloudinary.com/dgqcdiyad/image/upload/q_auto/f_auto/v1779791741/Screenshot_2026-05-26_160204_oybf6b.png",  items: ["Flashcards"] },
   { key: "banner-item",      label: "Banner",                              image: "https://res.cloudinary.com/dgqcdiyad/image/upload/q_auto/f_auto/v1779791776/Screenshot_2026-05-26_160213_mhblmx.png",  items: ["Banner"] },
   { key: "ribbon-item",      label: "Ribbon",                              image: "https://res.cloudinary.com/dgqcdiyad/image/upload/q_auto/f_auto/v1779791854/Screenshot_2026-05-26_160245_lwbfg3.png",  items: ["Ribbon"] },
-  { key: "gift-kit-sleeve",  label: "Gift Kit Sleeve",                     image: null, items: ["Gift Kit Sleeve"] },
-  { key: "gift-kit-tyc",     label: "Gift Kit Thank You Card",             image: null, items: ["Gift Kit Thank You Card"] },
+  { key: "gift-kit-sleeve",  label: "Sensory Kit Sleeve",                     image: null, items: ["Sensory Kit Sleeve"] },
+  { key: "gift-kit-tyc",     label: "Sensory Kit Thank You Card",             image: "https://res.cloudinary.com/dgqcdiyad/image/upload/q_auto/f_auto/v1780056711/sensory_kit_ty_card_ywfjts.jpg",  items: ["Sensory Kit Thank You Card"] },
   { key: "fb-box",           label: "Flashcard Kit Box",    image: "https://res.cloudinary.com/dgqcdiyad/image/upload/q_auto/f_auto/v1779791902/Screenshot_2026-05-26_160307_tebij6.png",  items: ["Flashcard Kit Box"] },
-  { key: "fb-tyc",           label: "Flashcard & Banner Thank You Card",   image: null, items: ["Flashcard & Banner Thank You Card"] },
+  { key: "fb-tyc",           label: "Flashcard Kit Thank You Card",   image: null, items: ["Flashcard Kit Thank You Card"] },
   {
     key: "potli",
     label: "Potli",
@@ -56,7 +56,7 @@ const PRODUCT_CATALOGUE = [
   {
     key: "teether-tyc",
     label: "Teether Thank You Card",
-    image: null,
+    image: "https://res.cloudinary.com/dgqcdiyad/image/upload/q_auto/f_auto/v1780056911/teether_ty_ca_yusojr.jpg",
     items: ["Teether Thank You Card"],
   },
 ]
@@ -128,7 +128,7 @@ const SHIPMENT_PRODUCTS = [
     fixedItems: [
       { name: "Flashcards", multiplier: 10 },
       "My First Book", "Banner",
-      "Gift Kit Sleeve", "Gift Kit Thank You Card",
+      "Sensory Kit Sleeve", "Sensory Kit Thank You Card",
     ],
     autoDeducts: [
       { name: "Blue Box", multiplier: 1 },
@@ -152,7 +152,7 @@ const SHIPMENT_PRODUCTS = [
       { name: "Flashcards", multiplier: 10 },
       "Banner",
       { name: "Ribbon", multiplier: 1 },
-      "Flashcard & Banner Thank You Card",
+      "Flashcard Kit Thank You Card",
       "Flashcard Kit Box",
     ],
   },
