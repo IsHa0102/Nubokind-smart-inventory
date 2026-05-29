@@ -138,13 +138,25 @@ function MasterSheet({ addToast }) {
     }
   }
 
+  const totalInventoryCost = rows.reduce((sum, r) => {
+    const p = Number(r.sellingPrice)
+    const s = Number(r.stock)
+    return sum + (p > 0 && s > 0 ? p * s : 0)
+  }, 0)
+
   const downloadCSV = () => {
-    const header = ["Master Product Name", "Master Product ID", "Selling Price", "Stock"]
-    const csvRows = rows.map((r) => [
-      `"${r.name}"`, `"${r.code}"`,
-      r.sellingPrice === "" ? "" : r.sellingPrice,
-      r.stock        === "" ? "" : r.stock,
-    ])
+    const header = ["Master Product Name", "Master Product ID", "Selling Price", "Stock", "Total Cost"]
+    const csvRows = rows.map((r) => {
+      const p = Number(r.sellingPrice)
+      const s = Number(r.stock)
+      const total = p > 0 && s > 0 ? p * s : ""
+      return [
+        `"${r.name}"`, `"${r.code}"`,
+        r.sellingPrice === "" ? "" : r.sellingPrice,
+        r.stock        === "" ? "" : r.stock,
+        total,
+      ]
+    })
     const csv = [header, ...csvRows].map((r) => r.join(",")).join("\n")
     const blob = new Blob([csv], { type: "text/csv" })
     const url  = URL.createObjectURL(blob)
@@ -178,6 +190,7 @@ function MasterSheet({ addToast }) {
               <th className="px-4 py-3 text-left">Master Product ID</th>
               <th className="px-4 py-3 text-left">Selling Price (₹)</th>
               <th className="px-4 py-3 text-left">Stock</th>
+              <th className="px-4 py-3 text-right">Total Cost (₹)</th>
             </tr>
           </thead>
           <tbody>
@@ -207,9 +220,26 @@ function MasterSheet({ addToast }) {
                     className="w-24 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                   />
                 </td>
+                <td className="px-4 py-2.5 text-right tabular-nums font-medium text-slate-700">
+                  {Number(row.sellingPrice) > 0 && Number(row.stock) > 0
+                    ? `₹${(Number(row.sellingPrice) * Number(row.stock)).toLocaleString("en-IN")}`
+                    : <span className="text-slate-300">—</span>}
+                </td>
               </tr>
             ))}
           </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-slate-200 bg-slate-50">
+              <td className="px-4 py-3 text-sm font-semibold text-slate-700" colSpan="4">
+                Total Inventory Cost
+              </td>
+              <td className="px-4 py-3 text-right text-sm font-bold text-indigo-700 tabular-nums">
+                {totalInventoryCost > 0
+                  ? `₹${totalInventoryCost.toLocaleString("en-IN")}`
+                  : <span className="font-normal text-slate-400">—</span>}
+              </td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>
