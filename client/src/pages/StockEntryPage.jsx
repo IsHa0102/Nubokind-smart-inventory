@@ -45,7 +45,7 @@ const PRODUCT_CATALOGUE = [
   { key: "ribbon-item",      label: "Ribbon",                              image: "https://res.cloudinary.com/dgqcdiyad/image/upload/q_auto/f_auto/v1779791854/Screenshot_2026-05-26_160245_lwbfg3.png",  items: ["Ribbon"] },
   { key: "gift-kit-sleeve",  label: "Gift Kit Sleeve",                     image: null, items: ["Gift Kit Sleeve"] },
   { key: "gift-kit-tyc",     label: "Gift Kit Thank You Card",             image: null, items: ["Gift Kit Thank You Card"] },
-  { key: "fb-box",           label: "Flashcard & Banner Packaging Box",    image: "https://res.cloudinary.com/dgqcdiyad/image/upload/q_auto/f_auto/v1779791902/Screenshot_2026-05-26_160307_tebij6.png",  items: ["Flashcard & Banner Packaging Box"] },
+  { key: "fb-box",           label: "Flashcard Kit Box",    image: "https://res.cloudinary.com/dgqcdiyad/image/upload/q_auto/f_auto/v1779791902/Screenshot_2026-05-26_160307_tebij6.png",  items: ["Flashcard Kit Box"] },
   { key: "fb-tyc",           label: "Flashcard & Banner Thank You Card",   image: null, items: ["Flashcard & Banner Thank You Card"] },
   {
     key: "potli",
@@ -153,7 +153,7 @@ const SHIPMENT_PRODUCTS = [
       "Banner",
       { name: "Ribbon", multiplier: 1 },
       "Flashcard & Banner Thank You Card",
-      "Flashcard & Banner Packaging Box",
+      "Flashcard Kit Box",
     ],
   },
 ]
