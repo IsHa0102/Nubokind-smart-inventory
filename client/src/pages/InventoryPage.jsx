@@ -21,6 +21,67 @@ function packagingOrder(name) {
   return 4
 }
 
+function InventoryTable({ items, emptyText, costs, onCostChange, onCostBlur }) {
+  return (
+    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+      <table className="min-w-full text-left text-sm">
+        <thead className="bg-slate-50">
+          <tr className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <th className="px-4 py-3">Item</th>
+            <th className="px-4 py-3">Stock</th>
+            <th className="px-4 py-3">Low Stock Threshold</th>
+            <th className="px-4 py-3">Status</th>
+            <th className="px-4 py-3">Cost (₹)</th>
+            <th className="px-4 py-3 text-right">Total Cost (₹)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.length === 0 ? (
+            <tr>
+              <td className="px-4 py-8 text-center text-slate-400" colSpan="6">{emptyText}</td>
+            </tr>
+          ) : (
+            items.map((product) => {
+              const status = getStatus(product)
+              const cost   = Number(costs[product.id] ?? 0)
+              const stock  = product.stock ?? 0
+              const total  = cost > 0 && stock > 0 ? cost * stock : null
+              return (
+                <tr key={product.id} className="border-t border-slate-100 hover:bg-slate-50">
+                  <td className="px-4 py-3 font-medium text-slate-900">{product.name}</td>
+                  <td className="px-4 py-3 tabular-nums text-slate-700">{stock}</td>
+                  <td className="px-4 py-3 tabular-nums text-slate-500">{product.low_stock_threshold}</td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyles[status]}`}>
+                      {status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <input
+                      type="number"
+                      min="0"
+                      value={costs[product.id] ?? ""}
+                      onChange={(e) => onCostChange(product.id, e.target.value)}
+                      onBlur={() => onCostBlur(product.id)}
+                      placeholder="e.g. 120"
+                      className="w-28 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    />
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums font-medium text-slate-700">
+                    {total !== null
+                      ? `₹${total.toLocaleString("en-IN")}`
+                      : <span className="text-slate-300">—</span>}
+                  </td>
+                </tr>
+              )
+            })
+          )}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 function InventoryPage() {
   const [products, setProducts] = useState([])
   const [costs, setCosts] = useState({})
@@ -71,67 +132,6 @@ function InventoryPage() {
     URL.revokeObjectURL(url)
   }
 
-  function InventoryTable({ items, emptyText }) {
-    return (
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full text-left text-sm">
-          <thead className="bg-slate-50">
-            <tr className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              <th className="px-4 py-3">Item</th>
-              <th className="px-4 py-3">Stock</th>
-              <th className="px-4 py-3">Low Stock Threshold</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Cost (₹)</th>
-              <th className="px-4 py-3 text-right">Total Cost (₹)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.length === 0 ? (
-              <tr>
-                <td className="px-4 py-8 text-center text-slate-400" colSpan="6">{emptyText}</td>
-              </tr>
-            ) : (
-              items.map((product) => {
-                const status = getStatus(product)
-                const cost   = Number(costs[product.id] ?? 0)
-                const stock  = product.stock ?? 0
-                const total  = cost > 0 && stock > 0 ? cost * stock : null
-                return (
-                  <tr key={product.id} className="border-t border-slate-100 hover:bg-slate-50">
-                    <td className="px-4 py-3 font-medium text-slate-900">{product.name}</td>
-                    <td className="px-4 py-3 tabular-nums text-slate-700">{stock}</td>
-                    <td className="px-4 py-3 tabular-nums text-slate-500">{product.low_stock_threshold}</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyles[status]}`}>
-                        {status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <input
-                        type="number"
-                        min="0"
-                        value={costs[product.id] ?? ""}
-                        onChange={(e) => handleCostChange(product.id, e.target.value)}
-                        onBlur={() => saveCost(product.id)}
-                        placeholder="e.g. 120"
-                        className="w-28 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums font-medium text-slate-700">
-                      {total !== null
-                        ? `₹${total.toLocaleString("en-IN")}`
-                        : <span className="text-slate-300">—</span>}
-                    </td>
-                  </tr>
-                )
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
@@ -153,7 +153,13 @@ function InventoryPage() {
           <h3 className="text-base font-semibold text-slate-800">Products</h3>
           <span className="text-xs font-medium text-slate-400">{productItems.length} items</span>
         </div>
-        <InventoryTable items={productItems} emptyText="No products yet." />
+        <InventoryTable
+          items={productItems}
+          emptyText="No products yet."
+          costs={costs}
+          onCostChange={handleCostChange}
+          onCostBlur={saveCost}
+        />
       </div>
 
       <div className="space-y-3">
@@ -161,7 +167,13 @@ function InventoryPage() {
           <h3 className="text-base font-semibold text-slate-800">Packaging Items</h3>
           <span className="text-xs font-medium text-slate-400">{packagingItems.length} items</span>
         </div>
-        <InventoryTable items={packagingItems} emptyText="No packaging items yet." />
+        <InventoryTable
+          items={packagingItems}
+          emptyText="No packaging items yet."
+          costs={costs}
+          onCostChange={handleCostChange}
+          onCostBlur={saveCost}
+        />
       </div>
 
       <div className="flex justify-end">
