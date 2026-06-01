@@ -32,6 +32,7 @@ function StatCard({ label, value, sub, color = "slate" }) {
 }
 
 function downloadCSV(topItems) {
+  const today = new Date().toISOString().split("T")[0]
   const headers = ["Item", "Type", "Current Stock", "Total Added", "Total Removed", "Avg Daily Usage", "Days Remaining"]
   const rows = topItems.map((i) => [
     i.name, i.item_type, i.current_stock, i.total_added, i.total_removed,
@@ -41,7 +42,7 @@ function downloadCSV(topItems) {
   const blob = new Blob([csv], { type: "text/csv" })
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
-  a.href = url; a.download = "inventory_report.csv"; a.click()
+  a.href = url; a.download = `inventory_report_${today}.csv`; a.click()
   URL.revokeObjectURL(url)
 }
 

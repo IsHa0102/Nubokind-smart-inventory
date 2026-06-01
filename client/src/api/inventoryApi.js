@@ -43,6 +43,14 @@ export const createProduct = async ({ name, stock, low_stock_threshold, item_typ
   return data
 }
 
+export const updateProductCost = async (id, cost) => {
+  const { error } = await supabase
+    .from("warehouse_products")
+    .update({ cost })
+    .eq("id", id)
+  if (error) throw new Error(error.message)
+}
+
 export const updateProduct = async (id, payload) => {
   const { data, error } = await supabase
     .from("warehouse_products")

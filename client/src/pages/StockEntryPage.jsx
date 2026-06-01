@@ -82,6 +82,7 @@ const SHIPMENT_PRODUCTS = [
   {
     key: "ele",
     label: "Ele Ring Silicone Teether Set",
+    masterId: null,
     image: "https://res.cloudinary.com/dgqcdiyad/image/upload/f_auto,q_auto/ele-teether-blue-beige__wljswi",
     variants: [
       { key: "sg_ab", label: "ELE TEETHER BLUE GREEN",  colors: ["Ele Sage Green Teether", "Ele Aqua Blue Teether"] },
@@ -98,6 +99,7 @@ const SHIPMENT_PRODUCTS = [
   {
     key: "kiko",
     label: "Kiko No Drop Teether",
+    masterId: null,
     image: "https://res.cloudinary.com/dgqcdiyad/image/upload/f_auto,q_auto/kiko_teether_baby_hand_green_b23ujn",
     variants: [
       { key: "sg", label: "KIKO TEETHER GREEN", colors: ["Kiko Teether Green"] },
@@ -112,6 +114,7 @@ const SHIPMENT_PRODUCTS = [
   {
     key: "cloth",
     label: "HIGH CONTRAST BOOKSET",
+    masterId: "BO-HC-3",
     image: "https://res.cloudinary.com/dgqcdiyad/image/upload/f_auto,q_auto/cloth_book_uu9rnk",
     variants: null,
     fixedItems: [
@@ -123,6 +126,7 @@ const SHIPMENT_PRODUCTS = [
   {
     key: "newborn",
     label: "HIGH CONTRAST SENSORY KIT",
+    masterId: "SK-HC-3",
     image: "https://res.cloudinary.com/dgqcdiyad/image/upload/f_auto,q_auto/montessori_kit_gysxiw",
     variants: null,
     fixedItems: [
@@ -138,6 +142,7 @@ const SHIPMENT_PRODUCTS = [
   {
     key: "potli",
     label: "Potli",
+    masterId: null,
     image: null,
     variants: null,
     fixedItems: ["Potli"],
@@ -146,6 +151,7 @@ const SHIPMENT_PRODUCTS = [
   {
     key: "fb-combo",
     label: "HIGH CONTRAST FLASHCARD KIT",
+    masterId: "FK-HC-2",
     image: "https://res.cloudinary.com/dgqcdiyad/image/upload/q_auto/f_auto/v1779792238/Screenshot_2026-05-26_161340_laoeol.png",
     variants: null,
     fixedItems: [
@@ -469,8 +475,8 @@ function ProductCard({ item, selected, onSelect }) {
           </div>
         )}
       </div>
-      <p className={`text-xs font-medium leading-tight ${selected ? "text-indigo-700" : "text-slate-700"}`}>
-        {item.label}
+      <p className="text-xs font-bold leading-tight">
+        <span className="bg-yellow-100 rounded px-1 py-0.5">{item.label}</span>
       </p>
     </button>
   )
@@ -514,11 +520,14 @@ function ShipmentProductCard({ item, isActive, lineCount, onClick }) {
           </div>
         )}
       </div>
-      <p className={`text-xs font-medium leading-tight ${
-        isActive ? "text-indigo-700" : hasLines ? "text-emerald-700" : "text-slate-700"
-      }`}>
-        {item.label}
+      <p className={`text-xs font-bold leading-tight`}>
+        <span className="bg-yellow-100 rounded px-1 py-0.5">
+          {item.label}
+        </span>
       </p>
+      {item.masterId && (
+        <p className="text-[10px] font-mono text-slate-400">{item.masterId}</p>
+      )}
     </button>
   )
 }
