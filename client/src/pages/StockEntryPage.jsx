@@ -837,16 +837,45 @@ function ShipmentFlow({ destinations }) {
             </div>
           </div>
 
-          {/* Deductions preview */}
+          {/* Deductions preview — grouped by shipment line */}
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
             <p className="mb-3 text-sm font-semibold text-amber-800">This will deduct from inventory:</p>
-            <div className="divide-y divide-amber-200 border border-amber-200 rounded-lg overflow-hidden">
-              {fullDeductions.map((d, i) => (
-                <div key={i} className="flex items-center justify-between px-3 py-2 text-sm bg-white even:bg-amber-50">
-                  <span className="text-slate-700">{d.name}</span>
-                  <span className="font-semibold text-rose-600">− {d.quantity}</span>
+            <div className="space-y-2">
+              {lines.map((line) => {
+                const product = SHIPMENT_PRODUCTS.find((p) => p.key === line.productKey)
+                const variant = product?.variants?.find((v) => v.key === line.variantKey)
+                const lineDeductions = buildLineDeductions(line.productKey, line.variantKey, line.qty)
+                return (
+                  <div key={line.id} className="overflow-hidden rounded-lg border border-amber-200">
+                    <div className="bg-amber-100 px-3 py-2">
+                      <p className="text-xs font-semibold text-amber-900">
+                        {product?.label}
+                        {variant ? ` — ${variant.label}` : ""}
+                        <span className="ml-1.5 font-normal text-amber-700">×{line.qty}</span>
+                      </p>
+                    </div>
+                    <div className="divide-y divide-amber-100">
+                      {lineDeductions.map((d, i) => (
+                        <div key={i} className="flex items-center justify-between bg-white px-3 py-2 text-sm even:bg-amber-50">
+                          <span className="text-slate-700">{d.name}</span>
+                          <span className="font-semibold text-rose-600">− {d.quantity}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+              {Number(corrugationBoxesUsed) > 0 && (
+                <div className="overflow-hidden rounded-lg border border-amber-200">
+                  <div className="bg-amber-100 px-3 py-2">
+                    <p className="text-xs font-semibold text-amber-900">Transport</p>
+                  </div>
+                  <div className="flex items-center justify-between bg-white px-3 py-2 text-sm">
+                    <span className="text-slate-700">Corrugation Box</span>
+                    <span className="font-semibold text-rose-600">− {Number(corrugationBoxesUsed)}</span>
+                  </div>
                 </div>
-              ))}
+              )}
             </div>
           </div>
 
