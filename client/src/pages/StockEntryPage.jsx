@@ -85,13 +85,13 @@ const SHIPMENT_PRODUCTS = [
     masterId: null,
     image: "https://res.cloudinary.com/dgqcdiyad/image/upload/f_auto,q_auto/ele-teether-blue-beige__wljswi",
     variants: [
-      { key: "sg_ab", label: "ELE TEETHER BLUE GREEN",  colors: ["Ele Sage Green Teether", "Ele Aqua Blue Teether"] },
-      { key: "bp_ob", label: "ELE TEETHER BEIGE PINK",  colors: ["Ele Baby Pink Teether", "Ele Oat Beige Teether"] },
-      { key: "sg_sg", label: "ELE TEETHER GREEN GREY",  colors: ["Ele Sage Green Teether", "Ele Slate Grey Teether"] },
-      { key: "ab_ob", label: "ELE TEETHER BEIGE BLUE",  colors: ["Ele Aqua Blue Teether", "Ele Oat Beige Teether"] },
-      { key: "ab_bp", label: "ELE TEETHER BLUE PINK",   colors: ["Ele Aqua Blue Teether", "Ele Baby Pink Teether"] },
-      { key: "sg_ob", label: "ELE TEETHER BEIGE GREEN", colors: ["Ele Sage Green Teether", "Ele Oat Beige Teether"] },
-      { key: "sg_bp", label: "ELE TEETHER GREEN PINK",  colors: ["Ele Sage Green Teether", "Ele Baby Pink Teether"] },
+      { key: "sg_ab", label: "ELE TEETHER BLUE GREEN",  masterId: "TE-EL-BL-GR-2", colors: ["Ele Sage Green Teether", "Ele Aqua Blue Teether"] },
+      { key: "bp_ob", label: "ELE TEETHER BEIGE PINK",  masterId: "TE-EL-BE-PI-2", colors: ["Ele Baby Pink Teether", "Ele Oat Beige Teether"] },
+      { key: "sg_sg", label: "ELE TEETHER GREEN GREY",  masterId: "TE-EL-GR-GY-2", colors: ["Ele Sage Green Teether", "Ele Slate Grey Teether"] },
+      { key: "ab_ob", label: "ELE TEETHER BEIGE BLUE",  masterId: "TE-EL-BE-BL-2", colors: ["Ele Aqua Blue Teether", "Ele Oat Beige Teether"] },
+      { key: "ab_bp", label: "ELE TEETHER BLUE PINK",   masterId: "TE-EL-BL-PI-2", colors: ["Ele Aqua Blue Teether", "Ele Baby Pink Teether"] },
+      { key: "sg_ob", label: "ELE TEETHER BEIGE GREEN", masterId: "TE-EL-BE-GR-2", colors: ["Ele Sage Green Teether", "Ele Oat Beige Teether"] },
+      { key: "sg_bp", label: "ELE TEETHER GREEN PINK",  masterId: "TE-EL-GR-PI-2", colors: ["Ele Sage Green Teether", "Ele Baby Pink Teether"] },
     ],
     fixedItems: ["Ele Box"],
     autoDeducts: [{ name: "Teether Thank You Card", multiplier: 1 }],
@@ -102,8 +102,8 @@ const SHIPMENT_PRODUCTS = [
     masterId: null,
     image: "https://res.cloudinary.com/dgqcdiyad/image/upload/f_auto,q_auto/kiko_teether_baby_hand_green_b23ujn",
     variants: [
-      { key: "sg", label: "KIKO TEETHER GREEN", colors: ["Kiko Teether Green"] },
-      { key: "cw", label: "KIKO TEETHER WHITE", colors: ["Kiko Teether White"] },
+      { key: "sg", label: "KIKO TEETHER GREEN", masterId: "TE-KI-GR-1", colors: ["Kiko Teether Green"] },
+      { key: "cw", label: "KIKO TEETHER WHITE", masterId: "TE-KI-WH-1", colors: ["Kiko Teether White"] },
     ],
     fixedItems: ["Kiko Box"],
     autoDeducts: [
@@ -742,13 +742,18 @@ function ShipmentFlow({ destinations }) {
                       key={v.key}
                       type="button"
                       onClick={() => setPendingVariant(v.key)}
-                      className={`rounded-lg border-2 px-3 py-1.5 text-xs font-medium transition-all ${
+                      className={`flex flex-col items-start rounded-lg border-2 px-3 py-1.5 text-xs font-medium transition-all ${
                         pendingVariant === v.key
                           ? "border-indigo-500 bg-indigo-100 text-indigo-700"
                           : "border-slate-200 bg-white text-slate-700 hover:border-indigo-300"
                       }`}
                     >
-                      {v.label}
+                      <span>{v.label}</span>
+                      {v.masterId && (
+                        <span className={`font-mono font-normal ${pendingVariant === v.key ? "text-indigo-400" : "text-slate-400"}`}>
+                          {v.masterId}
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>
