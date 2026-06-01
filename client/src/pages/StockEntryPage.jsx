@@ -1139,7 +1139,7 @@ function StockEntryPage() {
 
         {/* ADD / RECOUNT flow */}
         {form.type !== "shipment" && (
-          <form onSubmit={onSubmit} className="grid gap-6">
+          <div className="grid gap-6">
 
             {/* Product cards */}
             <div className="grid gap-3">
@@ -1172,7 +1172,7 @@ function StockEntryPage() {
               </div>
             </div>
 
-            {/* Corrugation special flow */}
+            {/* Corrugation special flow — own self-contained form, no nesting */}
             {isCorrugation && (
               <>
                 <div className="h-px bg-slate-100" />
@@ -1180,7 +1180,7 @@ function StockEntryPage() {
               </>
             )}
 
-            {/* Blue Box special flow */}
+            {/* Blue Box special flow — own self-contained form, no nesting */}
             {isBlueBox && (
               <>
                 <div className="h-px bg-slate-100" />
@@ -1188,8 +1188,10 @@ function StockEntryPage() {
               </>
             )}
 
-            {/* Regular item form */}
-            {selectedCatalogueKey && !isSpecialCard && (
+            {/* Regular item form — only rendered when not a special card */}
+            {!isSpecialCard && (
+              <form onSubmit={onSubmit} className="grid gap-6">
+            {selectedCatalogueKey && (
               <>
                 <div className="h-px bg-slate-100" />
                 <div className="grid gap-4">
@@ -1301,13 +1303,13 @@ function StockEntryPage() {
               </p>
             )}
 
-            {!isSpecialCard && (
-              <button type="submit" disabled={!selectedCatalogueKey}
-                className="w-full rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed sm:w-fit transition-colors">
-                Save Entry
-              </button>
-            )}
+            <button type="submit" disabled={!selectedCatalogueKey}
+              className="w-full rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed sm:w-fit transition-colors">
+              Save Entry
+            </button>
           </form>
+        )}
+          </div>
         )}
       </div>
     </div>
