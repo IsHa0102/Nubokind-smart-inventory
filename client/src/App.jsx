@@ -5,6 +5,7 @@ import StockEntryPage from './pages/StockEntryPage'
 import AdminPage from './pages/AdminPage'
 import FullHistoryPage from './pages/FullHistoryPage'
 import ReportsPage from './pages/ReportsPage'
+import PurchaseOrdersPage from './pages/PurchaseOrdersPage'
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/inventory-history" element={<FullHistoryPage />} />
         <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/purchase-orders" element={<PurchaseOrdersPage />} />
         <Route path="/history" element={<Navigate to="/inventory-history" replace />} />
       </Route>
     </Routes>

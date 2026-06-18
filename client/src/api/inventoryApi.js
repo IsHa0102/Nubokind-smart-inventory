@@ -302,6 +302,68 @@ export const upsertMasterSheetRow = async (product_code, selling_price, stock) =
   if (error) throw new Error(error.message)
 }
 
+// ── Purchase Orders ────────────────────────────────────────────────────────
+export const fetchPurchaseOrders = async () => {
+  const { data, error } = await supabase
+    .from("purchase_orders")
+    .select(`
+      *,
+      warehouse_products(name),
+      warehouse_manufacturers(name)
+    `)
+    .order("created_at", { ascending: false })
+  if (error) throw new Error(error.message)
+  return (data || []).map((o) => ({
+    ...o,
+    product_name:  o.warehouse_products?.name  ?? "Unknown",
+    supplier_name: o.warehouse_manufacturers?.name ?? null,
+  }))
+}
+
+export const createPurchaseOrder = async (payload) => {
+  const { data, error } = await supabase
+    .from("purchase_orders")
+    .insert(payload)
+    .select()
+    .single()
+  if (error) throw new Error(error.message)
+  return data
+}
+
+export const updatePurchaseOrderStatus = async (id, status, updateStock = false) => {
+  const { data: order, error: fetchErr } = await supabase
+    .from("purchase_orders")
+    .select("product_id, quantity_ordered")
+    .eq("id", id)
+    .single()
+  if (fetchErr) throw new Error(fetchErr.message)
+
+  const { error } = await supabase
+    .from("purchase_orders")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", id)
+  if (error) throw new Error(error.message)
+
+  if (updateStock && status === "received") {
+    const { data: product, error: pErr } = await supabase
+      .from("warehouse_products")
+      .select("stock")
+      .eq("id", order.product_id)
+      .single()
+    if (pErr) throw new Error(pErr.message)
+    const { error: sErr } = await supabase
+      .from("warehouse_products")
+      .update({ stock: product.stock + order.quantity_ordered })
+      .eq("id", order.product_id)
+    if (sErr) throw new Error(sErr.message)
+  }
+}
+
+export const deletePurchaseOrder = async (id) => {
+  const { error } = await supabase.from("purchase_orders").delete().eq("id", id)
+  if (error) throw new Error(error.message)
+}
+
 // ── Reports ────────────────────────────────────────────────────────────────
 export const fetchReportStats = async (params = {}) => {
   const { from, to, itemType } = params
