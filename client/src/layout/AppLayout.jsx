@@ -4,6 +4,7 @@ const links = [
   { to: "/reports",           label: "Reports" },
   { to: "/inventory",         label: "Inventory" },
   { to: "/stock-entry",       label: "Stock Entry" },
+  { to: "/purchase-orders",   label: "Orders" },
   { to: "/inventory-history", label: "History" },
   { to: "/admin",             label: "Admin" },
 ]
