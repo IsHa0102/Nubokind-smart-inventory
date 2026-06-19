@@ -246,6 +246,7 @@ function MasterSheet({ addToast }) {
   )
 }
 
+
 // ── Admin page ─────────────────────────────────────────────────────────────
 function AdminContent() {
   const [products, setProducts] = useState([])

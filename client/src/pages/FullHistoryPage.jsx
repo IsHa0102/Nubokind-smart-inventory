@@ -114,6 +114,8 @@ function FullHistoryPage() {
   const [lightboxImages, setLightboxImages] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
   const [confirmId, setConfirmId] = useState(null)
+  const [selectedIds, setSelectedIds] = useState(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   const handleDelete = async (id) => {
     setDeletingId(id)
@@ -121,11 +123,47 @@ function FullHistoryPage() {
       await deleteInventoryEntry(id)
       setEntries((prev) => prev.filter((e) => e.id !== id))
       setMeta((prev) => ({ ...prev, total: prev.total - 1 }))
+      setSelectedIds((prev) => { const next = new Set(prev); next.delete(id); return next })
     } catch (err) {
       alert("Failed to delete entry. Please try again.")
     } finally {
       setDeletingId(null)
       setConfirmId(null)
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    const ids = [...selectedIds]
+    if (!window.confirm(`Delete ${ids.length} entr${ids.length === 1 ? "y" : "ies"}? This cannot be undone.`)) return
+    setBulkDeleting(true)
+    try {
+      await Promise.all(ids.map((id) => deleteInventoryEntry(id)))
+      setEntries((prev) => prev.filter((e) => !selectedIds.has(e.id)))
+      setMeta((prev) => ({ ...prev, total: prev.total - ids.length }))
+      setSelectedIds(new Set())
+    } catch (err) {
+      alert("Failed to delete some entries. Please try again.")
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  const allSelected = entries.length > 0 && entries.every((e) => selectedIds.has(e.id))
+  const someSelected = entries.some((e) => selectedIds.has(e.id))
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(entries.map((e) => e.id)))
     }
   }
 
@@ -136,6 +174,7 @@ function FullHistoryPage() {
   useEffect(() => {
     const load = async () => {
       setLoading(true)
+      setSelectedIds(new Set())
       try {
         const payload = { page: filters.page, limit: filters.limit }
         if (filters.productId) payload.productId = filters.productId
@@ -214,6 +253,26 @@ function FullHistoryPage() {
         </div>
       </div>
 
+      {/* ── Bulk action toolbar ── */}
+      {someSelected && (
+        <div className="flex items-center gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5">
+          <span className="text-sm text-rose-700 font-medium">{selectedIds.size} selected</span>
+          <button
+            onClick={handleBulkDelete}
+            disabled={bulkDeleting}
+            className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-50 transition-colors"
+          >
+            {bulkDeleting ? "Deleting…" : `Delete selected (${selectedIds.size})`}
+          </button>
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            className="text-xs text-rose-500 hover:text-rose-700 transition-colors"
+          >
+            Clear selection
+          </button>
+        </div>
+      )}
+
       {/* ── Table ── Fix 5: spreadsheet/compact style */}
       <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
         {loading ? (
@@ -225,6 +284,15 @@ function FullHistoryPage() {
             <table className="min-w-full border-collapse text-sm">
               <thead>
                 <tr className="border-b border-slate-300 bg-slate-100">
+                  <th className="border-r border-slate-200 px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      ref={(el) => { if (el) el.indeterminate = someSelected && !allSelected }}
+                      onChange={toggleSelectAll}
+                      className="cursor-pointer"
+                    />
+                  </th>
                   <th className="border-r border-slate-200 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 whitespace-nowrap">Date</th>
                   <th className="border-r border-slate-200 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 whitespace-nowrap">Item Name</th>
                   <th className="border-r border-slate-200 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 whitespace-nowrap">Type</th>
@@ -255,6 +323,14 @@ function FullHistoryPage() {
                   const rowBg = idx % 2 === 0 ? "bg-white" : "bg-slate-50/60"
                   return (
                     <tr key={entry.id} className={`${rowBg} hover:bg-indigo-50/40 border-b border-slate-200 transition-colors`}>
+                      <td className="border-r border-slate-200 px-3 py-1.5">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(entry.id)}
+                          onChange={() => toggleSelect(entry.id)}
+                          className="cursor-pointer"
+                        />
+                      </td>
                       <td className="border-r border-slate-200 px-3 py-1.5 text-xs text-slate-500 whitespace-nowrap tabular-nums">
                         {formatDate(entry.created_at)}
                       </td>

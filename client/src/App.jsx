@@ -6,6 +6,7 @@ import AdminPage from './pages/AdminPage'
 import FullHistoryPage from './pages/FullHistoryPage'
 import ReportsPage from './pages/ReportsPage'
 import PurchaseOrdersPage from './pages/PurchaseOrdersPage'
+import PlannedShipmentsPage from './pages/PlannedShipmentsPage'
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
         <Route path="/dashboard" element={<Navigate to="/reports" replace />} />
         <Route path="/inventory" element={<InventoryPage />} />
         <Route path="/stock-entry" element={<StockEntryPage />} />
+        <Route path="/planned-shipments" element={<PlannedShipmentsPage />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/inventory-history" element={<FullHistoryPage />} />
         <Route path="/reports" element={<ReportsPage />} />

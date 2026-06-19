@@ -1,12 +1,13 @@
 import { NavLink, Outlet } from "react-router-dom"
 
 const links = [
-  { to: "/reports",           label: "Reports" },
-  { to: "/inventory",         label: "Inventory" },
-  { to: "/stock-entry",       label: "Stock Entry" },
-  { to: "/purchase-orders",   label: "Orders" },
-  { to: "/inventory-history", label: "History" },
-  { to: "/admin",             label: "Admin" },
+  { to: "/reports",            label: "Reports" },
+  { to: "/inventory",          label: "Inventory" },
+  { to: "/stock-entry",        label: "Stock Entry" },
+  { to: "/planned-shipments",  label: "Order Planning" },
+  { to: "/purchase-orders",    label: "Orders" },
+  { to: "/inventory-history",  label: "History" },
+  { to: "/admin",              label: "Admin" },
 ]
 
 function AppLayout() {

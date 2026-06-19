@@ -364,6 +364,50 @@ export const deletePurchaseOrder = async (id) => {
   if (error) throw new Error(error.message)
 }
 
+// ── Planned Shipments ──────────────────────────────────────────────────────
+export const fetchPlannedShipments = async () => {
+  const { data, error } = await supabase
+    .from("warehouse_planned_shipments")
+    .select("*, warehouse_planned_shipment_lines(*)")
+    .order("created_at", { ascending: false })
+  if (error) throw new Error(error.message)
+  return data || []
+}
+
+export const createPlannedShipment = async ({ destination, notes, lines }) => {
+  const { data: shipment, error: shipErr } = await supabase
+    .from("warehouse_planned_shipments")
+    .insert({ destination, notes: notes || null })
+    .select()
+    .single()
+  if (shipErr) throw new Error(shipErr.message)
+
+  if (lines && lines.length > 0) {
+    const { error: linesErr } = await supabase
+      .from("warehouse_planned_shipment_lines")
+      .insert(lines.map((l) => ({ ...l, shipment_id: shipment.id })))
+    if (linesErr) throw new Error(linesErr.message)
+  }
+
+  return shipment
+}
+
+export const updatePlannedShipmentStatus = async (id, status) => {
+  const { error } = await supabase
+    .from("warehouse_planned_shipments")
+    .update({ status })
+    .eq("id", id)
+  if (error) throw new Error(error.message)
+}
+
+export const deletePlannedShipment = async (id) => {
+  const { error } = await supabase
+    .from("warehouse_planned_shipments")
+    .delete()
+    .eq("id", id)
+  if (error) throw new Error(error.message)
+}
+
 // ── Reports ────────────────────────────────────────────────────────────────
 export const fetchReportStats = async (params = {}) => {
   const { from, to, itemType } = params
