@@ -86,6 +86,16 @@ function InventoryTable({ items, emptyText, costs, onCostChange, onCostBlur }) {
 function InventoryPage() {
   const [products, setProducts] = useState([])
   const [costs, setCosts] = useState({})
+  const [fgCounts, setFgCounts] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("nubo_fg_counts") || "{}") }
+    catch { return {} }
+  })
+
+  const handleFgChange = (key, val) => {
+    const updated = { ...fgCounts, [key]: val }
+    setFgCounts(updated)
+    localStorage.setItem("nubo_fg_counts", JSON.stringify(updated))
+  }
 
   useEffect(() => {
     fetchProducts().then((data) => {
@@ -125,16 +135,20 @@ function InventoryPage() {
     for (const sp of SHIPMENT_PRODUCTS) {
       const variantList = sp.variants ?? [null]
       for (const variant of variantList) {
+        const rowKey = `${sp.key}__${variant?.key ?? "none"}`
+        const fg = Math.max(0, Number(fgCounts[rowKey] ?? 0))
         const components = buildLineDeductions(sp.key, variant?.key ?? null, 1)
         if (components.length === 0) continue
         let limitingName = ""
         let limitingCount = Infinity
         for (const c of components) {
-          const canMake = Math.floor((nameToStock[c.name] ?? 0) / c.quantity)
+          const effectiveStock = Math.max(0, (nameToStock[c.name] ?? 0) - fg * c.quantity)
+          const canMake = Math.floor(effectiveStock / c.quantity)
           if (canMake < limitingCount) { limitingCount = canMake; limitingName = c.name }
         }
         const buildable = limitingCount === Infinity ? 0 : limitingCount
         rows.push({
+          rowKey,
           productLabel: sp.label,
           variantLabel: variant?.label ?? null,
           masterId: variant?.masterId ?? sp.masterId ?? null,
@@ -144,7 +158,7 @@ function InventoryPage() {
       }
     }
     return rows
-  }, [products])
+  }, [products, fgCounts])
 
   const downloadCSV = () => {
     const today = new Date().toISOString().split("T")[0]
@@ -217,6 +231,7 @@ function InventoryPage() {
               <tr className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <th className="px-4 py-3">SKU</th>
                 <th className="px-4 py-3">Master ID</th>
+                <th className="px-4 py-3 text-right">Current FG</th>
                 <th className="px-4 py-3 text-right">Can Build</th>
                 <th className="px-4 py-3">Bottleneck</th>
               </tr>
@@ -244,6 +259,16 @@ function InventoryPage() {
                     </td>
                     <td className="px-4 py-2.5 text-xs font-mono text-slate-500">
                       {row.masterId ?? <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="px-4 py-2.5 text-right">
+                      <input
+                        type="number"
+                        min="0"
+                        value={fgCounts[row.rowKey] ?? ""}
+                        onChange={(e) => handleFgChange(row.rowKey, e.target.value)}
+                        placeholder="0"
+                        className="w-20 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-sm text-right tabular-nums focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                      />
                     </td>
                     <td className="px-4 py-2.5 text-right">
                       <span className={`inline-flex rounded-full px-2.5 py-0.5 text-sm tabular-nums ${badge}`}>
