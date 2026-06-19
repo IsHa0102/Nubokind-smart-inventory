@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { fetchProducts, updateProductCost } from "../api/inventoryApi"
+import { SHIPMENT_PRODUCTS, buildLineDeductions } from "../lib/shipmentConfig"
 
 function getStatus(product) {
   if (product.stock <= 0) return "Out of Stock"
@@ -116,6 +117,35 @@ function InventoryPage() {
 
   const grandTotal = calcTotal(productItems) + calcTotal(packagingItems)
 
+  const buildableSkus = useMemo(() => {
+    const nameToStock = {}
+    products.forEach((p) => { nameToStock[p.name] = p.stock ?? 0 })
+
+    const rows = []
+    for (const sp of SHIPMENT_PRODUCTS) {
+      const variantList = sp.variants ?? [null]
+      for (const variant of variantList) {
+        const components = buildLineDeductions(sp.key, variant?.key ?? null, 1)
+        if (components.length === 0) continue
+        let limitingName = ""
+        let limitingCount = Infinity
+        for (const c of components) {
+          const canMake = Math.floor((nameToStock[c.name] ?? 0) / c.quantity)
+          if (canMake < limitingCount) { limitingCount = canMake; limitingName = c.name }
+        }
+        const buildable = limitingCount === Infinity ? 0 : limitingCount
+        rows.push({
+          productLabel: sp.label,
+          variantLabel: variant?.label ?? null,
+          masterId: variant?.masterId ?? sp.masterId ?? null,
+          buildable,
+          limitingComponent: buildable === 0 ? limitingName : null,
+        })
+      }
+    }
+    return rows
+  }, [products])
+
   const downloadCSV = () => {
     const today = new Date().toISOString().split("T")[0]
     const header = ["Item", "Item Type", "Stock", "Low Stock Threshold", "Status", "Cost (INR)", "Total Cost (INR)"]
@@ -174,6 +204,63 @@ function InventoryPage() {
           onCostChange={handleCostChange}
           onCostBlur={saveCost}
         />
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <h3 className="text-base font-semibold text-slate-800">Buildable SKUs</h3>
+          <span className="text-xs font-medium text-slate-400">from current raw stock</span>
+        </div>
+        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-slate-50">
+              <tr className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-4 py-3">SKU</th>
+                <th className="px-4 py-3">Master ID</th>
+                <th className="px-4 py-3 text-right">Can Build</th>
+                <th className="px-4 py-3">Bottleneck</th>
+              </tr>
+            </thead>
+            <tbody>
+              {buildableSkus.map((row, i) => {
+                const qty = row.buildable
+                const qtyColor = qty === 0
+                  ? "text-rose-600 font-bold"
+                  : qty <= 10
+                  ? "text-amber-600 font-semibold"
+                  : "text-emerald-600 font-semibold"
+                const badge = qty === 0
+                  ? "bg-rose-100 text-rose-700"
+                  : qty <= 10
+                  ? "bg-amber-100 text-amber-700"
+                  : "bg-emerald-100 text-emerald-700"
+                return (
+                  <tr key={i} className="border-t border-slate-100 hover:bg-slate-50">
+                    <td className="px-4 py-2.5">
+                      <p className="font-medium text-slate-900">{row.productLabel}</p>
+                      {row.variantLabel && (
+                        <p className="text-xs text-slate-400 mt-0.5">{row.variantLabel}</p>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-xs font-mono text-slate-500">
+                      {row.masterId ?? <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="px-4 py-2.5 text-right">
+                      <span className={`inline-flex rounded-full px-2.5 py-0.5 text-sm tabular-nums ${badge}`}>
+                        {qty}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-slate-500">
+                      {row.limitingComponent
+                        ? <span className="text-rose-500">{row.limitingComponent}</span>
+                        : <span className="text-slate-300">—</span>}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="flex justify-end">
