@@ -400,6 +400,27 @@ export const updatePlannedShipmentStatus = async (id, status) => {
   if (error) throw new Error(error.message)
 }
 
+export const updatePlannedShipment = async (id, { destination, notes, planned_date, lines }) => {
+  const { error: updErr } = await supabase
+    .from("warehouse_planned_shipments")
+    .update({ destination, notes: notes || null, planned_date: planned_date || null })
+    .eq("id", id)
+  if (updErr) throw new Error(updErr.message)
+
+  const { error: delErr } = await supabase
+    .from("warehouse_planned_shipment_lines")
+    .delete()
+    .eq("shipment_id", id)
+  if (delErr) throw new Error(delErr.message)
+
+  if (lines && lines.length > 0) {
+    const { error: insErr } = await supabase
+      .from("warehouse_planned_shipment_lines")
+      .insert(lines.map((l) => ({ sku_key: l.sku_key, variant_key: l.variant_key, quantity: l.quantity, label: l.label, shipment_id: id })))
+    if (insErr) throw new Error(insErr.message)
+  }
+}
+
 export const deletePlannedShipment = async (id) => {
   const { error } = await supabase
     .from("warehouse_planned_shipments")
