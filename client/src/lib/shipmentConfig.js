@@ -26,6 +26,7 @@ export const SHIPMENT_PRODUCTS = [
     variants: [
       { key: "sg", label: "KIKO TEETHER GREEN", masterId: "TE-KI-GR-1", colors: ["Kiko Teether Green"] },
       { key: "cw", label: "KIKO TEETHER WHITE", masterId: "TE-KI-WH-1", colors: ["Kiko Teether White"] },
+      { key: "bl", label: "KIKO TEETHER BLUE",  masterId: "TE-KI-BL-1", colors: ["Kiko Teether Blue"]  },
     ],
     fixedItems: ["Kiko Box"],
     autoDeducts: [

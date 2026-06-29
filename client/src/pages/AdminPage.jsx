@@ -100,6 +100,7 @@ const MASTER_PRODUCTS = [
   { name: "Ele Teether Green Pink",       code: "TE-EL-GR-PI-2" },
   { name: "Kiko Teether Green",           code: "TE-KI-GR-1"    },
   { name: "Kiko Teether White",           code: "TE-KI-WH-1"    },
+  { name: "Kiko Teether Blue",            code: "TE-KI-BL-1"    },
   { name: "High Contrast Bookset",        code: "BO-HC-3"        },
   { name: "High Contrast Sensory Kit",    code: "SK-HC-3"        },
   { name: "High Contrast Flashcard Kit",  code: "FK-HC-2"        },

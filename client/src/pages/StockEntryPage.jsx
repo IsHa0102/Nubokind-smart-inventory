@@ -27,7 +27,7 @@ const PRODUCT_CATALOGUE = [
     label: "Kiko No Drop Teether",
     image: "https://res.cloudinary.com/dgqcdiyad/image/upload/f_auto,q_auto/kiko_teether_baby_hand_green_b23ujn",
     items: [
-      "Kiko Teether Green", "Kiko Teether White",
+      "Kiko Teether Green", "Kiko Teether White", "Kiko Teether Blue",
       "Kiko Box",
     ],
   },
