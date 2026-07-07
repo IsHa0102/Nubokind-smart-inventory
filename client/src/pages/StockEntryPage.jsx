@@ -1115,7 +1115,9 @@ function StockEntryPage() {
                       className="rounded-lg border border-slate-300 px-3 py-2">
                       <option value="">Select item</option>
                       {filteredProducts.map((product) => (
-                        <option key={product.id} value={product.id}>{product.name}</option>
+                        <option key={product.id} value={product.id}>
+                          {product.item_code ? `${product.item_code} — ${product.name}` : product.name}
+                        </option>
                       ))}
                     </select>
                     {filteredProducts.length === 0 && (

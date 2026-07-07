@@ -29,6 +29,7 @@ function InventoryTable({ items, emptyText, costs, onCostChange, onCostBlur }) {
         <thead className="bg-slate-50">
           <tr className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             <th className="px-4 py-3">Item</th>
+            <th className="px-4 py-3">Item ID</th>
             <th className="px-4 py-3">Stock</th>
             <th className="px-4 py-3">Low Stock Threshold</th>
             <th className="px-4 py-3">Status</th>
@@ -39,7 +40,7 @@ function InventoryTable({ items, emptyText, costs, onCostChange, onCostBlur }) {
         <tbody>
           {items.length === 0 ? (
             <tr>
-              <td className="px-4 py-8 text-center text-slate-400" colSpan="6">{emptyText}</td>
+              <td className="px-4 py-8 text-center text-slate-400" colSpan="7">{emptyText}</td>
             </tr>
           ) : (
             items.map((product) => {
@@ -50,6 +51,7 @@ function InventoryTable({ items, emptyText, costs, onCostChange, onCostBlur }) {
               return (
                 <tr key={product.id} className="border-t border-slate-100 hover:bg-slate-50">
                   <td className="px-4 py-3 font-medium text-slate-900">{product.name}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-slate-400">{product.item_code ?? <span className="text-slate-200">—</span>}</td>
                   <td className="px-4 py-3 tabular-nums text-slate-700">{stock}</td>
                   <td className="px-4 py-3 tabular-nums text-slate-500">{product.low_stock_threshold}</td>
                   <td className="px-4 py-3">
