@@ -66,7 +66,7 @@ export const SHIPMENT_PRODUCTS = [
     key: "ball",
     label: "Ball Teether",
     masterId: null,
-    image: null,
+    image: "https://res.cloudinary.com/dgqcdiyad/image/upload/f_auto,q_auto/v1784511621/Screenshot_2026-07-20_070916_newhu7.png",
     variants: [
       { key: "ye", label: "BALL TEETHER YELLOW", masterId: "TE-BA-YE-1", colors: ["Ball Teether Yellow"] },
       { key: "bl", label: "BALL TEETHER BLUE",   masterId: "TE-BA-BL-1", colors: ["Ball Teether Blue"]   },

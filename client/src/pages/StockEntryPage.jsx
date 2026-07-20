@@ -34,7 +34,7 @@ const PRODUCT_CATALOGUE = [
   {
     key: "ball",
     label: "Ball Teether",
-    image: null,
+    image: "https://res.cloudinary.com/dgqcdiyad/image/upload/f_auto,q_auto/v1784511621/Screenshot_2026-07-20_070916_newhu7.png",
     items: ["Ball Teether Yellow", "Ball Teether Blue", "Ball Teether Box"],
   },
   {
