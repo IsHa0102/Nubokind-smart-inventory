@@ -32,6 +32,12 @@ const PRODUCT_CATALOGUE = [
     ],
   },
   {
+    key: "ball",
+    label: "Ball Teether",
+    image: null,
+    items: ["Ball Teether Yellow", "Ball Teether Blue", "Ball Teether Box"],
+  },
+  {
     key: "cloth",
     label: "HIGH CONTRAST BOOKSET",
     image: "https://res.cloudinary.com/dgqcdiyad/image/upload/f_auto,q_auto/cloth_book_uu9rnk",
@@ -53,6 +59,12 @@ const PRODUCT_CATALOGUE = [
     label: "Potli",
     image: null,
     items: ["Potli"],
+  },
+  {
+    key: "ball-tyc",
+    label: "Ball Teether Thank You Card",
+    image: null,
+    items: ["Ball Teether Thank You Card"],
   },
   {
     key: "teether-tyc",

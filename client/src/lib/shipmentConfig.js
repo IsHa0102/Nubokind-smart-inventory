@@ -63,6 +63,21 @@ export const SHIPMENT_PRODUCTS = [
     ],
   },
   {
+    key: "ball",
+    label: "Ball Teether",
+    masterId: null,
+    image: null,
+    variants: [
+      { key: "ye", label: "BALL TEETHER YELLOW", masterId: "TE-BA-YE-1", colors: ["Ball Teether Yellow"] },
+      { key: "bl", label: "BALL TEETHER BLUE",   masterId: "TE-BA-BL-1", colors: ["Ball Teether Blue"]   },
+    ],
+    fixedItems: ["Ball Teether Box"],
+    autoDeducts: [
+      { name: "Ball Teether Thank You Card", multiplier: 1 },
+      { name: "Potli", multiplier: 1 },
+    ],
+  },
+  {
     key: "potli",
     label: "Potli",
     masterId: null,
