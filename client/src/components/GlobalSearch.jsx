@@ -80,7 +80,12 @@ export function GlobalSearch() {
           }
           buildable = limiting === Infinity ? 0 : limiting
         }
-        rows.push({ label, masterId, rowKey, buildable, currentFg: fg })
+        const componentStock = components.map((c) => ({
+          name: c.name,
+          qtyPerUnit: c.quantity,
+          stock: nameToStock[c.name] ?? 0,
+        }))
+        rows.push({ label, masterId, rowKey, buildable, currentFg: fg, componentStock })
       }
     }
     return rows.slice(0, 8)
@@ -165,19 +170,46 @@ export function GlobalSearch() {
                   ? "text-amber-600"
                   : "text-emerald-600"
                 return (
-                  <div key={sku.rowKey} className="flex items-center gap-3 border-b border-slate-50 px-4 py-2.5 hover:bg-slate-50">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-slate-800">{sku.label}</p>
-                      <p className="font-mono text-xs text-slate-400">{sku.masterId ?? "—"}</p>
+                  <div key={sku.rowKey} className="border-b border-slate-100">
+                    {/* SKU header row */}
+                    <div className="flex items-center gap-3 px-4 py-2.5">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-slate-800">{sku.label}</p>
+                        <p className="font-mono text-xs text-slate-400">{sku.masterId ?? "—"}</p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className={`tabular-nums text-sm font-semibold ${buildColor}`}>
+                          Can build: {sku.buildable}
+                        </p>
+                        <p className="tabular-nums text-xs text-slate-400">
+                          Current FG: {sku.currentFg}
+                        </p>
+                      </div>
                     </div>
-                    <div className="shrink-0 text-right">
-                      <p className={`tabular-nums text-sm font-semibold ${buildColor}`}>
-                        Can build: {sku.buildable}
-                      </p>
-                      <p className="tabular-nums text-xs text-slate-400">
-                        Current FG: {sku.currentFg}
-                      </p>
-                    </div>
+                    {/* Component breakdown */}
+                    {sku.componentStock.length > 0 && (
+                      <div className="mx-4 mb-2.5 overflow-hidden rounded-lg border border-slate-100 bg-slate-50">
+                        <div className="grid grid-cols-3 border-b border-slate-100 px-3 py-1">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Component</p>
+                          <p className="text-center text-[10px] font-semibold uppercase tracking-wide text-slate-400">Per unit</p>
+                          <p className="text-right text-[10px] font-semibold uppercase tracking-wide text-slate-400">In stock</p>
+                        </div>
+                        {sku.componentStock.map((c) => {
+                          const stockColor = c.stock <= 0
+                            ? "text-rose-600 font-semibold"
+                            : c.stock < c.qtyPerUnit * 20
+                            ? "text-amber-600"
+                            : "text-emerald-600"
+                          return (
+                            <div key={c.name} className="grid grid-cols-3 border-t border-slate-100 px-3 py-1.5 first:border-t-0">
+                              <p className="text-xs text-slate-700 truncate pr-1">{c.name}</p>
+                              <p className="text-center text-xs tabular-nums text-slate-500">{c.qtyPerUnit}</p>
+                              <p className={`text-right text-xs tabular-nums ${stockColor}`}>{c.stock}</p>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
                 )
               })}
