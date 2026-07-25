@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react"
 import { NavLink, Outlet } from "react-router-dom"
 import { GlobalSearch } from "../components/GlobalSearch"
 
@@ -12,9 +13,21 @@ const links = [
 ]
 
 function AppLayout() {
+  const [scrolled, setScrolled] = useState(false)
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 10)
+    window.addEventListener("scroll", onScroll, { passive: true })
+    return () => window.removeEventListener("scroll", onScroll)
+  }, [])
+
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white">
+      <header className={`sticky top-0 z-40 border-b transition-all duration-300 ${
+        scrolled
+          ? "border-slate-200/60 bg-white/75 backdrop-blur-md"
+          : "border-slate-200 bg-white"
+      }`}>
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:gap-4">
           <div className="flex shrink-0 items-center gap-3">
             <img src="https://res.cloudinary.com/dgqcdiyad/image/upload/q_auto/f_auto/v1779892935/nubo_logo_yellow_bg_t1rxsk.png" alt="Nübo" className="h-9 w-auto rounded-lg" />
