@@ -61,12 +61,6 @@ const PRODUCT_CATALOGUE = [
     items: ["Potli"],
   },
   {
-    key: "ball-tyc",
-    label: "Ball Teether Thank You Card",
-    image: null,
-    items: ["Ball Teether Thank You Card"],
-  },
-  {
     key: "teether-tyc",
     label: "Teether Thank You Card",
     image: "https://res.cloudinary.com/dgqcdiyad/image/upload/q_auto/f_auto/v1780056911/teether_ty_ca_yusojr.jpg",

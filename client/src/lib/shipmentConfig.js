@@ -73,7 +73,7 @@ export const SHIPMENT_PRODUCTS = [
     ],
     fixedItems: ["Ball Teether Box"],
     autoDeducts: [
-      { name: "Ball Teether Thank You Card", multiplier: 1 },
+      { name: "Teether Thank You Card", multiplier: 1 },
       { name: "Potli", multiplier: 1 },
     ],
   },
