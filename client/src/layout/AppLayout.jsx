@@ -25,7 +25,7 @@ function AppLayout() {
     <div className="min-h-screen">
       <header className={`sticky top-0 z-40 border-b transition-all duration-300 ${
         scrolled
-          ? "border-slate-200/60 bg-white/75 backdrop-blur-md"
+          ? "border-transparent bg-transparent"
           : "border-slate-200 bg-white"
       }`}>
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:gap-4">
