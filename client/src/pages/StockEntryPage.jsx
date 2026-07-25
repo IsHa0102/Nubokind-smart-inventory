@@ -574,16 +574,21 @@ function ShipmentFlow({ destinations }) {
     }
   }
 
+  const twoPanel = activeProductKey !== null || lines.length > 0
+
   return (
     <form onSubmit={handleSubmit} className="grid gap-6">
+      <div className={twoPanel ? "flex flex-col gap-6 lg:flex-row lg:items-start" : ""}>
 
+      {/* LEFT — product cards */}
+      <div className={twoPanel ? "lg:w-1/2" : "w-full"}>
       {/* Step 1 — Product cards */}
       <div className="grid gap-3">
         <p className="text-sm font-semibold text-slate-700">
           Step 1 — Select products to ship{" "}
           <span className="font-normal text-slate-400 text-xs">click a card to configure, click again to close</span>
         </p>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+        <div className={`grid gap-3 ${twoPanel ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2 sm:grid-cols-3 xl:grid-cols-5"}`}>
           {SHIPMENT_PRODUCTS.map((p) => (
             <ShipmentProductCard
               key={p.key}
@@ -595,283 +600,258 @@ function ShipmentFlow({ destinations }) {
           ))}
         </div>
       </div>
+      </div>{/* end left column */}
 
-      {/* Step 2 — Configuration panel for active product */}
-      {activeProduct && (
-        <>
-          <div className="h-px bg-slate-100" />
-          <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 grid gap-4">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-indigo-800">
-                Configure: {activeProduct.label}
-              </p>
-              <button type="button" onClick={() => setActiveProductKey(null)}
-                className="text-xs text-indigo-400 hover:text-indigo-700 transition-colors">
-                Close ✕
-              </button>
-            </div>
+      {/* RIGHT — configurator + lines + details */}
+      {twoPanel && (
+        <div className="grid gap-6 lg:w-1/2">
 
-            {/* Variant selection — rendered dynamically from product config */}
-            {activeProduct.variants && (
-              <div className="grid gap-2">
-                <p className="text-xs font-medium text-slate-600">Select variant *</p>
-                <div className="flex flex-wrap gap-2">
-                  {activeProduct.variants.map((v) => (
-                    <button
-                      key={v.key}
-                      type="button"
-                      onClick={() => setPendingVariant(v.key)}
-                      className={`flex flex-col items-start rounded-lg border-2 px-3 py-1.5 text-xs font-medium transition-all ${
-                        pendingVariant === v.key
-                          ? "border-indigo-500 bg-indigo-100 text-indigo-700"
-                          : "border-slate-200 bg-white text-slate-700 hover:border-indigo-300"
-                      }`}
-                    >
-                      <span>{v.label}</span>
-                      {v.masterId && (
-                        <span className={`font-mono font-normal ${pendingVariant === v.key ? "text-indigo-400" : "text-slate-400"}`}>
-                          {v.masterId}
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
+          {activeProduct && (
+            <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 grid gap-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-indigo-800">Configure: {activeProduct.label}</p>
+                <button type="button" onClick={() => setActiveProductKey(null)}
+                  className="text-xs text-indigo-400 hover:text-indigo-700 transition-colors">
+                  Close ✕
+                </button>
               </div>
-            )}
-
-            {/* Quantity + Add */}
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-              <label className="grid gap-1 text-xs font-medium text-slate-600">
-                Quantity *
-                <input
-                  type="number"
-                  min="1"
-                  value={pendingQty}
-                  onChange={(e) => setPendingQty(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addLine() } }}
-                  className="w-full sm:w-36 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-                  placeholder="e.g. 5"
-                />
-              </label>
-              <button
-                type="button"
-                onClick={addLine}
-                disabled={!pendingQty || Number(pendingQty) <= 0 || (!!activeProduct.variants && !pendingVariant)}
-                className="shrink-0 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                + Add to Shipment
-              </button>
-            </div>
-
-            {message && !message.startsWith("✓") && (
-              <p className="text-xs font-medium text-rose-600">{message}</p>
-            )}
-          </div>
-        </>
-      )}
-
-      {/* Shipment lines table */}
-      {lines.length > 0 && (
-        <>
-          <div className="h-px bg-slate-100" />
-          <div className="grid gap-3">
-            <p className="text-sm font-semibold text-slate-700">Items in this shipment</p>
-            <div className="overflow-hidden rounded-xl border border-slate-200">
-              <table className="min-w-full divide-y divide-slate-100 text-sm">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Product</th>
-                    <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Variant</th>
-                    <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 w-28">Qty</th>
-                    <th className="px-3 py-2.5 w-16"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
-                  {lines.map((line) => {
-                    const product = SHIPMENT_PRODUCTS.find((p) => p.key === line.productKey)
-                    const variant = product?.variants?.find((v) => v.key === line.variantKey)
-                    return (
-                      <tr key={line.id} className="hover:bg-slate-50">
-                        <td className="px-3 py-2 font-medium text-slate-800">
-                          {product?.label || line.productKey}
-                        </td>
-                        <td className="px-3 py-2 text-slate-600 text-sm">
-                          {variant?.label || <span className="text-slate-400">—</span>}
-                        </td>
-                        <td className="px-3 py-2">
-                          <input
-                            type="number"
-                            min="1"
-                            value={line.qty}
-                            onChange={(e) => updateLineQty(line.id, e.target.value)}
-                            className="w-20 rounded-lg border border-slate-300 px-2 py-1 text-sm text-center"
-                          />
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          <button type="button" onClick={() => removeLine(line.id)}
-                            className="text-xs font-medium text-rose-500 hover:text-rose-700 transition-colors">
-                            Remove
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Deductions preview — grouped by shipment line */}
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-            <p className="mb-3 text-sm font-semibold text-amber-800">This will deduct from inventory:</p>
-            <div className="space-y-2">
-              {lines.map((line) => {
-                const product = SHIPMENT_PRODUCTS.find((p) => p.key === line.productKey)
-                const variant = product?.variants?.find((v) => v.key === line.variantKey)
-                const lineDeductions = buildLineDeductions(line.productKey, line.variantKey, line.qty)
-                return (
-                  <div key={line.id} className="overflow-hidden rounded-lg border border-amber-200">
-                    <div className="bg-amber-100 px-3 py-2">
-                      <p className="text-xs font-semibold text-amber-900">
-                        {product?.label}
-                        {variant ? ` — ${variant.label}` : ""}
-                        <span className="ml-1.5 font-normal text-amber-700">×{line.qty}</span>
-                      </p>
-                    </div>
-                    <div className="divide-y divide-amber-100">
-                      {lineDeductions.map((d, i) => (
-                        <div key={i} className="flex items-center justify-between bg-white px-3 py-2 text-sm even:bg-amber-50">
-                          <span className="text-slate-700">{d.name}</span>
-                          <span className="font-semibold text-rose-600">− {d.quantity}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })}
-              {Number(corrugationBoxesUsed) > 0 && (
-                <div className="overflow-hidden rounded-lg border border-amber-200">
-                  <div className="bg-amber-100 px-3 py-2">
-                    <p className="text-xs font-semibold text-amber-900">Transport</p>
-                  </div>
-                  <div className="flex items-center justify-between bg-white px-3 py-2 text-sm">
-                    <span className="text-slate-700">Corrugation Box</span>
-                    <span className="font-semibold text-rose-600">− {Number(corrugationBoxesUsed)}</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Shipment details */}
-          <div className="h-px bg-slate-100" />
-          <div className="grid gap-4">
-            <p className="text-sm font-semibold text-slate-700">Shipment Details</p>
-
-            <label className="grid gap-2 text-sm font-medium text-slate-700">
-              Destination *
-              <select value={destination} onChange={(e) => setDestination(e.target.value)}
-                className="rounded-lg border border-slate-300 px-3 py-2">
-                <option value="">Select destination</option>
-                {destinations.map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
-              </select>
-            </label>
-
-            <div className="grid gap-1">
-              <label className="text-sm font-medium text-slate-700">
-                Corrugation boxes used *
-              </label>
-              <input
-                type="number"
-                min="1"
-                value={corrugationBoxesUsed}
-                onChange={(e) => setCorrugationBoxesUsed(e.target.value)}
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm max-w-[200px]"
-                placeholder="e.g. 15"
-              />
-              <p className="text-xs text-slate-500">This quantity will be deducted from Corrugation Box inventory</p>
-            </div>
-
-            <label className="grid gap-2 text-sm font-medium text-slate-700">
-              Remarks
-              <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)}
-                rows="2" className="rounded-lg border border-slate-300 px-3 py-2" />
-            </label>
-
-            <label className="grid gap-2 text-sm font-medium text-slate-700">
-              Date *
-              <input type="date" value={entryDate} max={today}
-                onChange={(e) => setEntryDate(e.target.value)}
-                className="rounded-lg border border-slate-300 px-3 py-2" />
-            </label>
-
-            {/* Images */}
-            <div className="grid gap-2">
-              <p className="text-sm font-medium text-slate-700">
-                Images <span className="font-normal text-slate-400">(Optional, max 3)</span>
-                {images.length > 0 && <span className="font-normal text-slate-400"> — {images.length} selected</span>}
-              </p>
-              {images.length < 3 && (
-                <input key={fileInputKey} type="file" accept="image/*" multiple onChange={onFileChange}
-                  className="rounded-lg border border-slate-300 p-2 text-sm" />
-              )}
-              {imagePreviews.length > 0 && (
-                <div className="mt-1 grid grid-cols-3 gap-2">
-                  {imagePreviews.map((preview, idx) => (
-                    <div key={idx} className="relative group">
-                      <img src={preview} alt="" className="h-20 w-full rounded-lg object-cover border border-slate-200" />
-                      <button type="button" onClick={() => removeImg(idx)}
-                        className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition">
-                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
+              {activeProduct.variants && (
+                <div className="grid gap-2">
+                  <p className="text-xs font-medium text-slate-600">Select variant *</p>
+                  <div className="flex flex-wrap gap-2">
+                    {activeProduct.variants.map((v) => (
+                      <button
+                        key={v.key}
+                        type="button"
+                        onClick={() => setPendingVariant(v.key)}
+                        className={`flex flex-col items-start rounded-lg border-2 px-3 py-1.5 text-xs font-medium transition-all ${
+                          pendingVariant === v.key
+                            ? "border-indigo-500 bg-indigo-100 text-indigo-700"
+                            : "border-slate-200 bg-white text-slate-700 hover:border-indigo-300"
+                        }`}
+                      >
+                        <span>{v.label}</span>
+                        {v.masterId && (
+                          <span className={`font-mono font-normal ${pendingVariant === v.key ? "text-indigo-400" : "text-slate-400"}`}>
+                            {v.masterId}
+                          </span>
+                        )}
                       </button>
-                      <span className="absolute bottom-1 left-1 rounded bg-black/40 px-1 text-[10px] text-white">{idx + 1}</span>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               )}
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                <label className="grid gap-1 text-xs font-medium text-slate-600">
+                  Quantity *
+                  <input
+                    type="number"
+                    min="1"
+                    value={pendingQty}
+                    onChange={(e) => setPendingQty(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addLine() } }}
+                    className="w-full sm:w-36 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                    placeholder="e.g. 5"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={addLine}
+                  disabled={!pendingQty || Number(pendingQty) <= 0 || (!!activeProduct.variants && !pendingVariant)}
+                  className="shrink-0 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  + Add to Shipment
+                </button>
+              </div>
+              {message && !message.startsWith("✓") && (
+                <p className="text-xs font-medium text-rose-600">{message}</p>
+              )}
             </div>
-          </div>
+          )}
 
-          {/* Shipment summary panel */}
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-            <p className="mb-3 text-sm font-semibold text-emerald-800">Shipment Summary</p>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr>
-                    <th className="pb-2 text-left text-xs font-semibold uppercase tracking-wide text-emerald-700">Product</th>
-                    <th className="pb-2 pl-4 text-left text-xs font-semibold uppercase tracking-wide text-emerald-700">Variant</th>
-                    <th className="pb-2 text-right text-xs font-semibold uppercase tracking-wide text-emerald-700">Qty</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map((line) => {
-                    const product = SHIPMENT_PRODUCTS.find((p) => p.key === line.productKey)
-                    const variant = product?.variants?.find((v) => v.key === line.variantKey)
-                    return (
-                      <tr key={line.id} className="border-t border-emerald-100">
-                        <td className="py-1.5 pr-4 text-slate-700">{product?.label}</td>
-                        <td className="py-1.5 pl-4 pr-4 text-slate-600 text-xs">{variant?.label || "—"}</td>
-                        <td className="py-1.5 text-right font-semibold text-slate-800">{line.qty}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-emerald-200">
-                    <td className="pt-2 font-semibold text-emerald-800" colSpan="2">
-                      {lines.length} line{lines.length !== 1 ? "s" : ""} · Total units
-                    </td>
-                    <td className="pt-2 text-right font-bold text-emerald-900 text-base">{totalQty}</td>
-                  </tr>
-                </tfoot>
-              </table>
+          {lines.length > 0 && (
+            <div className="grid gap-3">
+              <p className="text-sm font-semibold text-slate-700">Items in this shipment</p>
+              <div className="overflow-hidden rounded-xl border border-slate-200">
+                <table className="min-w-full divide-y divide-slate-100 text-sm">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Product</th>
+                      <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Variant</th>
+                      <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 w-28">Qty</th>
+                      <th className="px-3 py-2.5 w-16"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {lines.map((line) => {
+                      const product = SHIPMENT_PRODUCTS.find((p) => p.key === line.productKey)
+                      const variant = product?.variants?.find((v) => v.key === line.variantKey)
+                      return (
+                        <tr key={line.id} className="hover:bg-slate-50">
+                          <td className="px-3 py-2 font-medium text-slate-800">{product?.label || line.productKey}</td>
+                          <td className="px-3 py-2 text-slate-600 text-sm">{variant?.label || <span className="text-slate-400">—</span>}</td>
+                          <td className="px-3 py-2">
+                            <input type="number" min="1" value={line.qty}
+                              onChange={(e) => updateLineQty(line.id, e.target.value)}
+                              className="w-20 rounded-lg border border-slate-300 px-2 py-1 text-sm text-center" />
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <button type="button" onClick={() => removeLine(line.id)}
+                              className="text-xs font-medium text-rose-500 hover:text-rose-700 transition-colors">
+                              Remove
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        </>
-      )}
+          )}
+
+          {lines.length > 0 && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <p className="mb-3 text-sm font-semibold text-amber-800">This will deduct from inventory:</p>
+              <div className="space-y-2">
+                {lines.map((line) => {
+                  const product = SHIPMENT_PRODUCTS.find((p) => p.key === line.productKey)
+                  const variant = product?.variants?.find((v) => v.key === line.variantKey)
+                  const lineDeductions = buildLineDeductions(line.productKey, line.variantKey, line.qty)
+                  return (
+                    <div key={line.id} className="overflow-hidden rounded-lg border border-amber-200">
+                      <div className="bg-amber-100 px-3 py-2">
+                        <p className="text-xs font-semibold text-amber-900">
+                          {product?.label}{variant ? ` — ${variant.label}` : ""}
+                          <span className="ml-1.5 font-normal text-amber-700">×{line.qty}</span>
+                        </p>
+                      </div>
+                      <div className="divide-y divide-amber-100">
+                        {lineDeductions.map((d, i) => (
+                          <div key={i} className="flex items-center justify-between bg-white px-3 py-2 text-sm even:bg-amber-50">
+                            <span className="text-slate-700">{d.name}</span>
+                            <span className="font-semibold text-rose-600">− {d.quantity}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+                {Number(corrugationBoxesUsed) > 0 && (
+                  <div className="overflow-hidden rounded-lg border border-amber-200">
+                    <div className="bg-amber-100 px-3 py-2">
+                      <p className="text-xs font-semibold text-amber-900">Transport</p>
+                    </div>
+                    <div className="flex items-center justify-between bg-white px-3 py-2 text-sm">
+                      <span className="text-slate-700">Corrugation Box</span>
+                      <span className="font-semibold text-rose-600">− {Number(corrugationBoxesUsed)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {lines.length > 0 && (
+            <div className="grid gap-4">
+              <p className="text-sm font-semibold text-slate-700">Shipment Details</p>
+              <label className="grid gap-2 text-sm font-medium text-slate-700">
+                Destination *
+                <select value={destination} onChange={(e) => setDestination(e.target.value)}
+                  className="rounded-lg border border-slate-300 px-3 py-2">
+                  <option value="">Select destination</option>
+                  {destinations.map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+                </select>
+              </label>
+              <div className="grid gap-1">
+                <label className="text-sm font-medium text-slate-700">Corrugation boxes used *</label>
+                <input type="number" min="1" value={corrugationBoxesUsed}
+                  onChange={(e) => setCorrugationBoxesUsed(e.target.value)}
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm max-w-[200px]"
+                  placeholder="e.g. 15" />
+                <p className="text-xs text-slate-500">This quantity will be deducted from Corrugation Box inventory</p>
+              </div>
+              <label className="grid gap-2 text-sm font-medium text-slate-700">
+                Remarks
+                <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)}
+                  rows="2" className="rounded-lg border border-slate-300 px-3 py-2" />
+              </label>
+              <label className="grid gap-2 text-sm font-medium text-slate-700">
+                Date *
+                <input type="date" value={entryDate} max={today}
+                  onChange={(e) => setEntryDate(e.target.value)}
+                  className="rounded-lg border border-slate-300 px-3 py-2" />
+              </label>
+              <div className="grid gap-2">
+                <p className="text-sm font-medium text-slate-700">
+                  Images <span className="font-normal text-slate-400">(Optional, max 3)</span>
+                  {images.length > 0 && <span className="font-normal text-slate-400"> — {images.length} selected</span>}
+                </p>
+                {images.length < 3 && (
+                  <input key={fileInputKey} type="file" accept="image/*" multiple onChange={onFileChange}
+                    className="rounded-lg border border-slate-300 p-2 text-sm" />
+                )}
+                {imagePreviews.length > 0 && (
+                  <div className="mt-1 grid grid-cols-3 gap-2">
+                    {imagePreviews.map((preview, idx) => (
+                      <div key={idx} className="relative group">
+                        <img src={preview} alt="" className="h-20 w-full rounded-lg object-cover border border-slate-200" />
+                        <button type="button" onClick={() => removeImg(idx)}
+                          className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition">
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                        <span className="absolute bottom-1 left-1 rounded bg-black/40 px-1 text-[10px] text-white">{idx + 1}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {lines.length > 0 && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+              <p className="mb-3 text-sm font-semibold text-emerald-800">Shipment Summary</p>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr>
+                      <th className="pb-2 text-left text-xs font-semibold uppercase tracking-wide text-emerald-700">Product</th>
+                      <th className="pb-2 pl-4 text-left text-xs font-semibold uppercase tracking-wide text-emerald-700">Variant</th>
+                      <th className="pb-2 text-right text-xs font-semibold uppercase tracking-wide text-emerald-700">Qty</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lines.map((line) => {
+                      const product = SHIPMENT_PRODUCTS.find((p) => p.key === line.productKey)
+                      const variant = product?.variants?.find((v) => v.key === line.variantKey)
+                      return (
+                        <tr key={line.id} className="border-t border-emerald-100">
+                          <td className="py-1.5 pr-4 text-slate-700">{product?.label}</td>
+                          <td className="py-1.5 pl-4 pr-4 text-slate-600 text-xs">{variant?.label || "—"}</td>
+                          <td className="py-1.5 text-right font-semibold text-slate-800">{line.qty}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-emerald-200">
+                      <td className="pt-2 font-semibold text-emerald-800" colSpan="2">
+                        {lines.length} line{lines.length !== 1 ? "s" : ""} · Total units
+                      </td>
+                      <td className="pt-2 text-right font-bold text-emerald-900 text-base">{totalQty}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
+
+        </div>
+      )}{/* end right column */}
+      </div>{/* end two-panel wrapper */}
 
       {message && (
         <p className={`text-sm font-medium ${message.startsWith("✓") ? "text-emerald-600" : "text-rose-600"}`}>
@@ -1052,178 +1032,167 @@ function StockEntryPage() {
 
         {/* ADD / RECOUNT flow */}
         {form.type !== "shipment" && (
-          <div className="grid gap-6">
+          <div className={selectedCatalogueKey ? "flex flex-col gap-6 lg:flex-row lg:items-start" : "grid gap-6"}>
 
-            {/* Product cards */}
-            <div className="grid gap-3">
-              <p className="text-sm font-semibold text-slate-700">Step 1 — Select a product *</p>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {PRODUCT_CATALOGUE.map((cat) => (
-                  <ProductCard
-                    key={cat.key}
-                    item={cat}
-                    selected={selectedCatalogueKey === cat.key}
-                    onSelect={handleCatalogueSelect}
-                  />
-                ))}
-                {/* Corrugation box — ADD only */}
-                {form.type === "add" && (
-                  <ProductCard
-                    item={CORRUGATION_BOX}
-                    selected={selectedCatalogueKey === "corrugation"}
-                    onSelect={handleCatalogueSelect}
-                  />
-                )}
-                {/* Blue Box — ADD only */}
-                {form.type === "add" && (
-                  <ProductCard
-                    item={BLUE_BOX_CARD}
-                    selected={selectedCatalogueKey === "bluebox"}
-                    onSelect={handleCatalogueSelect}
-                  />
-                )}
+            {/* LEFT — product cards */}
+            <div className={selectedCatalogueKey ? "lg:w-1/2" : ""}>
+              <div className="grid gap-3">
+                <p className="text-sm font-semibold text-slate-700">Step 1 — Select a product *</p>
+                <div className={`grid gap-3 ${selectedCatalogueKey ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2 sm:grid-cols-4"}`}>
+                  {PRODUCT_CATALOGUE.map((cat) => (
+                    <ProductCard
+                      key={cat.key}
+                      item={cat}
+                      selected={selectedCatalogueKey === cat.key}
+                      onSelect={handleCatalogueSelect}
+                    />
+                  ))}
+                  {/* Corrugation box — ADD only */}
+                  {form.type === "add" && (
+                    <ProductCard
+                      item={CORRUGATION_BOX}
+                      selected={selectedCatalogueKey === "corrugation"}
+                      onSelect={handleCatalogueSelect}
+                    />
+                  )}
+                  {/* Blue Box — ADD only */}
+                  {form.type === "add" && (
+                    <ProductCard
+                      item={BLUE_BOX_CARD}
+                      selected={selectedCatalogueKey === "bluebox"}
+                      onSelect={handleCatalogueSelect}
+                    />
+                  )}
+                </div>
               </div>
             </div>
 
-            {/* Corrugation special flow — own self-contained form, no nesting */}
-            {isCorrugation && (
-              <>
-                <div className="h-px bg-slate-100" />
-                <CorrugationFlow manufacturers={manufacturers} />
-              </>
-            )}
-
-            {/* Blue Box special flow — own self-contained form, no nesting */}
-            {isBlueBox && (
-              <>
-                <div className="h-px bg-slate-100" />
-                <BlueBoxFlow manufacturers={manufacturers} />
-              </>
-            )}
-
-            {/* Regular item form — only rendered when not a special card */}
-            {!isSpecialCard && (
-              <form onSubmit={onSubmit} className="grid gap-6">
+            {/* RIGHT — entry form */}
             {selectedCatalogueKey && (
-              <>
-                <div className="h-px bg-slate-100" />
-                <div className="grid gap-4">
-                  <p className="text-sm font-semibold text-slate-700">
-                    Step 2 — Fill in the details
-                    <span className="ml-2 text-xs font-normal text-indigo-600 bg-indigo-50 rounded-full px-2 py-0.5">
-                      {selectedCatalogue?.label}
-                    </span>
-                  </p>
+              <div className="lg:w-1/2">
+                {/* Corrugation special flow */}
+                {isCorrugation && <CorrugationFlow manufacturers={manufacturers} />}
 
-                  <label className="grid gap-2 text-sm font-medium text-slate-700">
-                    Item *
-                    <select name="product_id" value={form.product_id} onChange={onChange}
-                      className="rounded-lg border border-slate-300 px-3 py-2">
-                      <option value="">Select item</option>
-                      {filteredProducts.map((product) => (
-                        <option key={product.id} value={product.id}>
-                          {product.item_code ? `${product.item_code} — ${product.name}` : product.name}
-                        </option>
-                      ))}
-                    </select>
-                    {filteredProducts.length === 0 && (
-                      <p className="text-xs text-amber-600">No matching items found for this product.</p>
-                    )}
-                  </label>
+                {/* Blue Box special flow */}
+                {isBlueBox && <BlueBoxFlow manufacturers={manufacturers} />}
 
-                  <label className="grid gap-2 text-sm font-medium text-slate-700">
-                    {(() => {
-                      const selectedItem = filteredProducts.find((p) => String(p.id) === String(form.product_id))
-                      return selectedItem?.name?.toLowerCase() === "ribbon"
-                        ? "Quantity (in meters) *"
-                        : "Quantity *"
-                    })()}
-                    <input
-                      name="quantity"
-                      type="number"
-                      min="1"
-                      value={form.quantity}
-                      onChange={onChange}
-                      className="rounded-lg border border-slate-300 px-3 py-2"
-                      placeholder={
-                        filteredProducts.find((p) => String(p.id) === String(form.product_id))?.name?.toLowerCase() === "ribbon"
-                          ? "e.g. 100 meters"
-                          : ""
-                      }
-                    />
-                  </label>
+                {/* Regular item form */}
+                {!isSpecialCard && (
+                  <form onSubmit={onSubmit} className="grid gap-4">
+                    <p className="text-sm font-semibold text-slate-700">
+                      Step 2 — Fill in the details
+                      <span className="ml-2 text-xs font-normal text-indigo-600 bg-indigo-50 rounded-full px-2 py-0.5">
+                        {selectedCatalogue?.label}
+                      </span>
+                    </p>
 
-                  {typeFields === "source" && (
                     <label className="grid gap-2 text-sm font-medium text-slate-700">
-                      From *
-                      <select name="source" value={form.source} onChange={onChange}
+                      Item *
+                      <select name="product_id" value={form.product_id} onChange={onChange}
                         className="rounded-lg border border-slate-300 px-3 py-2">
-                        <option value="">Select source</option>
-                        {manufacturers.map((item) => (
-                          <option key={item.id} value={item.name}>{item.name}</option>
+                        <option value="">Select item</option>
+                        {filteredProducts.map((product) => (
+                          <option key={product.id} value={product.id}>
+                            {product.item_code ? `${product.item_code} — ${product.name}` : product.name}
+                          </option>
                         ))}
                       </select>
-                    </label>
-                  )}
-
-                  <label className="grid gap-2 text-sm font-medium text-slate-700">
-                    Remarks
-                    <textarea name="remarks" value={form.remarks} onChange={onChange} rows="3"
-                      className="rounded-lg border border-slate-300 px-3 py-2" />
-                  </label>
-
-                  <label className="grid gap-2 text-sm font-medium text-slate-700">
-                    Date *
-                    <input name="entry_date" type="date" value={form.entry_date} max={today}
-                      onChange={onChange} className="rounded-lg border border-slate-300 px-3 py-2" />
-                  </label>
-
-                  {/* Images */}
-                  <div className="grid gap-2">
-                    <p className="text-sm font-medium text-slate-700">
-                      Images <span className="font-normal text-slate-400">(Optional, max 3)</span>
-                      {form.images.length > 0 && (
-                        <span className="font-normal text-slate-400"> — {form.images.length} selected</span>
+                      {filteredProducts.length === 0 && (
+                        <p className="text-xs text-amber-600">No matching items found for this product.</p>
                       )}
-                    </p>
-                    {form.images.length < 3 && (
-                      <input key={fileInputKey} type="file" accept="image/*" multiple onChange={onFileChange}
-                        className="rounded-lg border border-slate-300 p-2 text-sm" />
-                    )}
-                    {imagePreviews.length > 0 && (
-                      <div className="mt-1 grid grid-cols-3 gap-2">
-                        {imagePreviews.map((preview, index) => (
-                          <div key={index} className="relative group">
-                            <img src={preview} alt={`Preview ${index + 1}`}
-                              className="h-20 w-full rounded-lg object-cover border border-slate-200" />
-                            <button type="button" onClick={() => removeImage(index)}
-                              className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow-lg transition hover:bg-red-600 opacity-100 md:opacity-0 md:group-hover:opacity-100">
-                              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-                            <span className="absolute bottom-1 left-1 rounded bg-black/40 px-1 text-[10px] text-white">{index + 1}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
+                    </label>
 
-            {message && (
-              <p className={`text-sm font-medium ${message.includes("success") ? "text-emerald-600" : "text-rose-600"}`}>
-                {message}
-              </p>
-            )}
+                    <label className="grid gap-2 text-sm font-medium text-slate-700">
+                      {(() => {
+                        const selectedItem = filteredProducts.find((p) => String(p.id) === String(form.product_id))
+                        return selectedItem?.name?.toLowerCase() === "ribbon"
+                          ? "Quantity (in meters) *"
+                          : "Quantity *"
+                      })()}
+                      <input
+                        name="quantity"
+                        type="number"
+                        min="1"
+                        value={form.quantity}
+                        onChange={onChange}
+                        className="rounded-lg border border-slate-300 px-3 py-2"
+                        placeholder={
+                          filteredProducts.find((p) => String(p.id) === String(form.product_id))?.name?.toLowerCase() === "ribbon"
+                            ? "e.g. 100 meters"
+                            : ""
+                        }
+                      />
+                    </label>
 
-            <button type="submit" disabled={!selectedCatalogueKey}
-              className="w-full rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed sm:w-fit transition-colors">
-              Save Entry
-            </button>
-          </form>
-        )}
+                    {typeFields === "source" && (
+                      <label className="grid gap-2 text-sm font-medium text-slate-700">
+                        From *
+                        <select name="source" value={form.source} onChange={onChange}
+                          className="rounded-lg border border-slate-300 px-3 py-2">
+                          <option value="">Select source</option>
+                          {manufacturers.map((item) => (
+                            <option key={item.id} value={item.name}>{item.name}</option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+
+                    <label className="grid gap-2 text-sm font-medium text-slate-700">
+                      Remarks
+                      <textarea name="remarks" value={form.remarks} onChange={onChange} rows="3"
+                        className="rounded-lg border border-slate-300 px-3 py-2" />
+                    </label>
+
+                    <label className="grid gap-2 text-sm font-medium text-slate-700">
+                      Date *
+                      <input name="entry_date" type="date" value={form.entry_date} max={today}
+                        onChange={onChange} className="rounded-lg border border-slate-300 px-3 py-2" />
+                    </label>
+
+                    <div className="grid gap-2">
+                      <p className="text-sm font-medium text-slate-700">
+                        Images <span className="font-normal text-slate-400">(Optional, max 3)</span>
+                        {form.images.length > 0 && (
+                          <span className="font-normal text-slate-400"> — {form.images.length} selected</span>
+                        )}
+                      </p>
+                      {form.images.length < 3 && (
+                        <input key={fileInputKey} type="file" accept="image/*" multiple onChange={onFileChange}
+                          className="rounded-lg border border-slate-300 p-2 text-sm" />
+                      )}
+                      {imagePreviews.length > 0 && (
+                        <div className="mt-1 grid grid-cols-3 gap-2">
+                          {imagePreviews.map((preview, index) => (
+                            <div key={index} className="relative group">
+                              <img src={preview} alt={`Preview ${index + 1}`}
+                                className="h-20 w-full rounded-lg object-cover border border-slate-200" />
+                              <button type="button" onClick={() => removeImage(index)}
+                                className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow-lg transition hover:bg-red-600 opacity-100 md:opacity-0 md:group-hover:opacity-100">
+                                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                              <span className="absolute bottom-1 left-1 rounded bg-black/40 px-1 text-[10px] text-white">{index + 1}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {message && (
+                      <p className={`text-sm font-medium ${message.includes("success") ? "text-emerald-600" : "text-rose-600"}`}>
+                        {message}
+                      </p>
+                    )}
+
+                    <button type="submit" disabled={!selectedCatalogueKey}
+                      className="w-full rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed sm:w-fit transition-colors">
+                      Save Entry
+                    </button>
+                  </form>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
