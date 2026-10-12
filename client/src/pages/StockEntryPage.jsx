@@ -49,13 +49,13 @@ const PRODUCT_CATALOGUE = [
   {
     key: "mat",
     label: "SENSORY ADVENTURE MAT",
-    image: null,
+    image: "https://res.cloudinary.com/dgqcdiyad/image/upload/f_auto,q_auto/v1791794886/amazonthumbnail_vq7snc.png",
     items: ["Sensory Mat", "Sensory Mat Thank You Card", "Sensory Mat Box"],
   },
   {
     key: "ganesha",
     label: "CHANTING BABY GANESHA",
-    image: null,
+    image: "https://res.cloudinary.com/dgqcdiyad/image/upload/f_auto,q_auto/v1791794873/ganeshaamazonthumbnail_ayiibb.png",
     items: ["Ganesha Plushie", "Ganesha Thank You Card", "Ganesha Box"],
   },
   { key: "cloth-book-item",  label: "My First Book",                          image: "https://res.cloudinary.com/dgqcdiyad/image/upload/q_auto/f_auto/v1779791651/Screenshot_2026-05-26_160139_mnb1vn.png",  items: ["My First Book"] },
@@ -72,6 +72,7 @@ const PRODUCT_CATALOGUE = [
     image: null,
     items: ["Potli"],
   },
+  { key: "plastic-packaging", label: "Plastic Packaging", image: null, items: ["Plastic Packaging"] },
   {
     key: "teether-tyc",
     label: "Teether Thank You Card",
