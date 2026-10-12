@@ -60,7 +60,6 @@ export const SHIPMENT_PRODUCTS = [
     autoDeducts: [
       { name: "Blue Box", multiplier: 1 },
       { name: "Ribbon",   multiplier: 1 },
-      { name: "Plastic Packaging", multiplier: 1 },
     ],
   },
   {
@@ -85,7 +84,7 @@ export const SHIPMENT_PRODUCTS = [
     image: "https://res.cloudinary.com/dgqcdiyad/image/upload/f_auto,q_auto/v1791794886/amazonthumbnail_vq7snc.png",
     variants: null,
     fixedItems: ["Sensory Mat", "Sensory Mat Thank You Card", "Sensory Mat Box"],
-    autoDeducts: [{ name: "Plastic Packaging", multiplier: 1 }],
+    autoDeducts: [],
   },
   {
     key: "ganesha",
@@ -94,7 +93,7 @@ export const SHIPMENT_PRODUCTS = [
     image: "https://res.cloudinary.com/dgqcdiyad/image/upload/f_auto,q_auto/v1791794873/ganeshaamazonthumbnail_ayiibb.png",
     variants: null,
     fixedItems: ["Ganesha Plushie", "Ganesha Thank You Card", "Ganesha Box"],
-    autoDeducts: [{ name: "Plastic Packaging", multiplier: 1 }],
+    autoDeducts: [],
   },
   {
     key: "potli",
