@@ -60,6 +60,7 @@ export const SHIPMENT_PRODUCTS = [
     autoDeducts: [
       { name: "Blue Box", multiplier: 1 },
       { name: "Ribbon",   multiplier: 1 },
+      { name: "Plastic Packaging", multiplier: 1 },
     ],
   },
   {
