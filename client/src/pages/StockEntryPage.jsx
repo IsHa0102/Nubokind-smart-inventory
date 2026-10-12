@@ -46,6 +46,18 @@ const PRODUCT_CATALOGUE = [
       "Book Kit Sleeve", "Book Kit Thank You Card",
     ],
   },
+  {
+    key: "mat",
+    label: "SENSORY ADVENTURE MAT",
+    image: null,
+    items: ["Sensory Mat", "Sensory Mat Thank You Card", "Sensory Mat Box"],
+  },
+  {
+    key: "ganesha",
+    label: "CHANTING BABY GANESHA",
+    image: null,
+    items: ["Ganesha Plushie", "Ganesha Thank You Card", "Ganesha Box"],
+  },
   { key: "cloth-book-item",  label: "My First Book",                          image: "https://res.cloudinary.com/dgqcdiyad/image/upload/q_auto/f_auto/v1779791651/Screenshot_2026-05-26_160139_mnb1vn.png",  items: ["My First Book"] },
   { key: "flashcards-item",  label: "Flashcards",                          image: "https://res.cloudinary.com/dgqcdiyad/image/upload/q_auto/f_auto/v1779791741/Screenshot_2026-05-26_160204_oybf6b.png",  items: ["Flashcards"] },
   { key: "banner-item",      label: "Banner",                              image: "https://res.cloudinary.com/dgqcdiyad/image/upload/q_auto/f_auto/v1779791776/Screenshot_2026-05-26_160213_mhblmx.png",  items: ["Banner"] },

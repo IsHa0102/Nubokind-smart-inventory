@@ -106,6 +106,8 @@ const MASTER_PRODUCTS = [
   { name: "High Contrast Bookset",        code: "BO-HC-3"        },
   { name: "High Contrast Sensory Kit",    code: "SK-HC-3"        },
   { name: "High Contrast Flashcard Kit",  code: "FK-HC-2"        },
+  { name: "Sensory Adventure Mat",        code: "MA-SA-1"        },
+  { name: "Chanting Baby Ganesha",        code: "PL-CG-1"        },
 ]
 
 function MasterSheet({ addToast }) {
