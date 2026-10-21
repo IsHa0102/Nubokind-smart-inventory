@@ -3,6 +3,7 @@ import { ToastContainer, useToasts } from "../components/Toast"
 import {
   fetchPurchaseOrders,
   createPurchaseOrder,
+  updatePurchaseOrder,
   updatePurchaseOrderStatus,
   deletePurchaseOrder,
   fetchProducts,
@@ -44,24 +45,34 @@ function StatCard({ label, value, sub, color = "slate" }) {
   )
 }
 
-function LogOrderModal({ products, manufacturers, onClose, onSave }) {
+// One modal for both logging a new order and editing an existing one (`order`).
+function OrderModal({ order, products, manufacturers, onClose, onSave }) {
+  const editing = !!order
+  // A received order's stock has already been added, so its component, quantity
+  // and status are locked (see updatePurchaseOrder). The rest stays editable.
+  const locked = order?.status === "received"
   const [form, setForm] = useState({
-    product_id: "",
-    supplier_id: "",
-    quantity_ordered: "",
-    order_date: new Date().toISOString().split("T")[0],
-    expected_delivery_date: "",
-    notes: "",
+    product_id: order ? String(order.product_id) : "",
+    supplier_id: order?.supplier_id ? String(order.supplier_id) : "",
+    quantity_ordered: order ? String(order.quantity_ordered) : "",
+    expected_delivery_date: order?.expected_delivery_date ?? "",
+    status: order?.status ?? "ordered",
+    notes: order?.notes ?? "",
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
 
   const set = (field, val) => setForm((f) => ({ ...f, [field]: val }))
+  const becomingReceived = editing && !locked && form.status === "received"
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!form.product_id || !form.quantity_ordered) {
       setError("Product and quantity are required.")
+      return
+    }
+    if (Number(form.quantity_ordered) < 1) {
+      setError("Quantity must be at least 1.")
       return
     }
     setSaving(true)
@@ -71,10 +82,9 @@ function LogOrderModal({ products, manufacturers, onClose, onSave }) {
         product_id: Number(form.product_id),
         supplier_id: form.supplier_id ? Number(form.supplier_id) : null,
         quantity_ordered: Number(form.quantity_ordered),
-        order_date: form.order_date || null,
         expected_delivery_date: form.expected_delivery_date || null,
         notes: form.notes || null,
-        status: "ordered",
+        status: form.status,
       })
       onClose()
     } catch (err) {
@@ -88,8 +98,14 @@ function LogOrderModal({ products, manufacturers, onClose, onSave }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-md rounded-2xl bg-white shadow-xl">
         <div className="border-b border-slate-200 px-6 py-4">
-          <h2 className="text-lg font-bold text-slate-900">Log Purchase Order</h2>
-          <p className="text-sm text-slate-500">Record a new order placed with a manufacturer</p>
+          <h2 className="text-lg font-bold text-slate-900">{editing ? "Edit Purchase Order" : "Log Purchase Order"}</h2>
+          <p className="text-sm text-slate-500">
+            {locked
+              ? "Received — stock was already added, so component, quantity and status are locked"
+              : editing
+              ? "Changes feed straight into manufacturing planning"
+              : "Record a new order placed with a manufacturer"}
+          </p>
         </div>
         <form onSubmit={handleSubmit} className="grid gap-4 p-6">
           <div>
@@ -97,7 +113,8 @@ function LogOrderModal({ products, manufacturers, onClose, onSave }) {
             <select
               value={form.product_id}
               onChange={(e) => set("product_id", e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              disabled={locked}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-50 disabled:text-slate-400"
               required
             >
               <option value="">Select component…</option>
@@ -127,22 +144,14 @@ function LogOrderModal({ products, manufacturers, onClose, onSave }) {
               type="number" min="1"
               value={form.quantity_ordered}
               onChange={(e) => set("quantity_ordered", e.target.value)}
+              disabled={locked}
               placeholder="e.g. 500"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-50 disabled:text-slate-400"
               required
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Order Date</label>
-              <input
-                type="date"
-                value={form.order_date}
-                onChange={(e) => set("order_date", e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-              />
-            </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Expected Delivery</label>
               <input
@@ -152,7 +161,30 @@ function LogOrderModal({ products, manufacturers, onClose, onSave }) {
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
               />
             </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Status</label>
+              <select
+                value={form.status}
+                onChange={(e) => set("status", e.target.value)}
+                disabled={locked || !editing}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-50 disabled:text-slate-400"
+              >
+                {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
+                  <option key={key} value={key}>{cfg.label}</option>
+                ))}
+              </select>
+            </div>
           </div>
+          {!form.expected_delivery_date && !locked && (
+            <p className="-mt-2 text-xs text-slate-400">
+              No date set — planning will assume the supplier&apos;s usual lead time.
+            </p>
+          )}
+          {becomingReceived && (
+            <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+              Saving will add {Number(form.quantity_ordered || 0).toLocaleString("en-IN")} units to warehouse stock.
+            </p>
+          )}
 
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">Notes</label>
@@ -178,7 +210,7 @@ function LogOrderModal({ products, manufacturers, onClose, onSave }) {
               type="submit" disabled={saving}
               className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
             >
-              {saving ? "Saving…" : "Log Order"}
+              {saving ? "Saving…" : editing ? "Save Changes" : "Log Order"}
             </button>
           </div>
         </form>
@@ -250,6 +282,7 @@ export default function PurchaseOrdersPage() {
   const [error, setError] = useState("")
   const [showLogModal, setShowLogModal] = useState(false)
   const [receivingOrder, setReceivingOrder] = useState(null)
+  const [editingOrder, setEditingOrder] = useState(null)
   const [statusFilter, setStatusFilter] = useState("active")
   const { toasts, addToast, removeToast } = useToasts()
 
@@ -277,6 +310,19 @@ export default function PurchaseOrdersPage() {
   const handleCreate = async (payload) => {
     await createPurchaseOrder(payload)
     addToast("Order logged successfully", "success")
+    load()
+  }
+
+  const handleEdit = async (payload) => {
+    const order = editingOrder
+    await updatePurchaseOrder(order.id, payload)
+    const nowReceived = order.status !== "received" && payload.status === "received"
+    addToast(
+      nowReceived
+        ? `${payload.quantity_ordered.toLocaleString("en-IN")} units added to stock`
+        : "Order updated",
+      "success",
+    )
     load()
   }
 
@@ -385,7 +431,6 @@ export default function PurchaseOrdersPage() {
                   <th className="px-4 py-3 text-left">Component</th>
                   <th className="px-4 py-3 text-left">Supplier</th>
                   <th className="px-4 py-3 text-right">Qty Ordered</th>
-                  <th className="px-4 py-3 text-left">Order Date</th>
                   <th className="px-4 py-3 text-left">Expected By</th>
                   <th className="px-4 py-3 text-left">Status</th>
                   <th className="px-4 py-3 text-left">Notes</th>
@@ -403,7 +448,6 @@ export default function PurchaseOrdersPage() {
                       <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-900">
                         {order.quantity_ordered.toLocaleString("en-IN")}
                       </td>
-                      <td className="px-4 py-3 text-slate-500">{fmtDate(order.order_date)}</td>
                       <td className="px-4 py-3">
                         {order.expected_delivery_date ? (
                           <span className={isOverdue ? "font-medium text-red-600" : "text-slate-500"}>
@@ -422,6 +466,12 @@ export default function PurchaseOrdersPage() {
                       <td className="px-4 py-3 max-w-[180px] truncate text-slate-400 text-xs">{order.notes ?? "—"}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => setEditingOrder(order)}
+                            className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
+                          >
+                            Edit
+                          </button>
                           {order.status === "ordered" && (
                             <button
                               onClick={() => handleStatusUpdate(order.id, "in_transit")}
@@ -470,11 +520,21 @@ export default function PurchaseOrdersPage() {
       )}
 
       {showLogModal && (
-        <LogOrderModal
+        <OrderModal
           products={products}
           manufacturers={manufacturers}
           onClose={() => setShowLogModal(false)}
           onSave={handleCreate}
+        />
+      )}
+
+      {editingOrder && (
+        <OrderModal
+          order={editingOrder}
+          products={products}
+          manufacturers={manufacturers}
+          onClose={() => setEditingOrder(null)}
+          onSave={handleEdit}
         />
       )}
 
