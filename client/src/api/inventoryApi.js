@@ -359,6 +359,61 @@ export const updatePurchaseOrderStatus = async (id, status, updateStock = false)
   }
 }
 
+// Edit any field of a purchase order.
+//
+// A received order has already added its units to warehouse_products.stock, so
+// its component, quantity and status are locked: editing the quantity afterwards
+// would leave stock out of step with the order, and there is no un-receive. Its
+// supplier, expected date and notes stay editable — they touch no stock.
+// Moving an open order to "received" through here adds its (possibly just
+// edited) quantity to stock, exactly as the Received button does.
+export const updatePurchaseOrder = async (id, fields) => {
+  const { data: existing, error: fetchErr } = await supabase
+    .from("purchase_orders")
+    .select("status")
+    .eq("id", id)
+    .single()
+  if (fetchErr) throw new Error(fetchErr.message)
+
+  const wasReceived = existing.status === "received"
+  const patch = wasReceived
+    ? {
+        supplier_id: fields.supplier_id,
+        expected_delivery_date: fields.expected_delivery_date,
+        notes: fields.notes,
+      }
+    : {
+        product_id: fields.product_id,
+        supplier_id: fields.supplier_id,
+        quantity_ordered: fields.quantity_ordered,
+        expected_delivery_date: fields.expected_delivery_date,
+        status: fields.status,
+        notes: fields.notes,
+      }
+
+  const { data: updated, error } = await supabase
+    .from("purchase_orders")
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("product_id, quantity_ordered")
+    .single()
+  if (error) throw new Error(error.message)
+
+  if (!wasReceived && fields.status === "received") {
+    const { data: product, error: pErr } = await supabase
+      .from("warehouse_products")
+      .select("stock")
+      .eq("id", updated.product_id)
+      .single()
+    if (pErr) throw new Error(pErr.message)
+    const { error: sErr } = await supabase
+      .from("warehouse_products")
+      .update({ stock: product.stock + updated.quantity_ordered })
+      .eq("id", updated.product_id)
+    if (sErr) throw new Error(sErr.message)
+  }
+}
+
 export const deletePurchaseOrder = async (id) => {
   const { error } = await supabase.from("purchase_orders").delete().eq("id", id)
   if (error) throw new Error(error.message)
