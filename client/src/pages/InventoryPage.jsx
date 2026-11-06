@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { fetchProducts, updateProductCost } from "../api/inventoryApi"
-import { SHIPMENT_PRODUCTS, buildLineDeductions } from "../lib/shipmentConfig"
+import { SHIPMENT_PRODUCTS, buildLineDeductions, makeStockLookup } from "../lib/shipmentConfig"
 
 function getStatus(product) {
   if (product.stock <= 0) return "Out of Stock"
@@ -130,8 +130,7 @@ function InventoryPage() {
   const grandTotal = calcTotal(productItems) + calcTotal(packagingItems)
 
   const buildableSkus = useMemo(() => {
-    const nameToStock = {}
-    products.forEach((p) => { nameToStock[p.name] = p.stock ?? 0 })
+    const stockOf = makeStockLookup(products)
 
     const rows = []
     for (const sp of SHIPMENT_PRODUCTS) {
@@ -144,7 +143,7 @@ function InventoryPage() {
         let limitingName = ""
         let limitingCount = Infinity
         for (const c of components) {
-          const effectiveStock = Math.max(0, (nameToStock[c.name] ?? 0) - fg * c.quantity)
+          const effectiveStock = Math.max(0, stockOf(c.name) - fg * c.quantity)
           const canMake = Math.floor(effectiveStock / c.quantity)
           if (canMake < limitingCount) { limitingCount = canMake; limitingName = c.name }
         }

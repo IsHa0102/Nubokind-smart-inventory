@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from "react"
 import {
   bulkAddInventory,
-  bulkRemoveInventory,
+  saveConsignment,
   createInventoryEntry,
   fetchDestinations,
   fetchManufacturers,
   fetchProducts,
 } from "../api/inventoryApi"
-import { SHIPMENT_PRODUCTS, buildLineDeductions, buildAllDeductions } from "../lib/shipmentConfig"
+import { SHIPMENT_PRODUCTS, buildLineDeductions, lineLabel } from "../lib/shipmentConfig"
+import TemplateButtons from "../components/ConsignmentTemplateButtons"
+import ComponentMappingWarning from "../components/ComponentMappingWarning"
 
 // ── Product catalogue (for ADD / RECOUNT item filtering) ──────────────────
 // Potli is now a standalone product — removed from Ele and Kiko items
@@ -439,6 +441,7 @@ function ShipmentFlow({ destinations }) {
   // Shared shipment fields
   const [destination, setDestination] = useState("")
   const [remarks, setRemarks] = useState("")
+  const [reference, setReference] = useState("")
   const [entryDate, setEntryDate] = useState(today)
   const [corrugationBoxesUsed, setCorrugationBoxesUsed] = useState("")
   const [images, setImages] = useState([])
@@ -449,7 +452,6 @@ function ShipmentFlow({ destinations }) {
 
   const activeProduct = SHIPMENT_PRODUCTS.find((p) => p.key === activeProductKey)
 
-  const allDeductions = useMemo(() => buildAllDeductions(lines), [lines])
 
   const linesPerProduct = useMemo(() => {
     const counts = {}
@@ -458,15 +460,6 @@ function ShipmentFlow({ destinations }) {
   }, [lines])
 
   const totalQty = lines.reduce((sum, l) => sum + l.qty, 0)
-
-  // Full deduction list including corrugation (shown in preview + sent to backend)
-  const fullDeductions = useMemo(() => {
-    const corrugQty = Number(corrugationBoxesUsed)
-    if (corrugQty > 0) {
-      return [...allDeductions, { name: "Corrugation Box", quantity: corrugQty }]
-    }
-    return allDeductions
-  }, [allDeductions, corrugationBoxesUsed])
 
   const handleCardClick = (productKey) => {
     if (activeProductKey === productKey) {
@@ -542,6 +535,24 @@ function ShipmentFlow({ destinations }) {
     setFileInputKey((k) => k + 1)
   }
 
+  // Filled Excel template → form. Nothing is saved until Confirm Shipment.
+  const loadTemplate = (t) => {
+    setLines(t.lines.map((l) => ({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      productKey: l.sku_key,
+      variantKey: l.variant_key || "",
+      qty: l.quantity,
+    })))
+    setDestination(t.destination)
+    if (t.dispatch_date) setEntryDate(t.dispatch_date)
+    setReference(t.reference)
+    setRemarks(t.notes)
+    if (t.corrugation_boxes !== null) setCorrugationBoxesUsed(String(t.corrugation_boxes))
+    setActiveProductKey(null)
+    const units = t.lines.reduce((s, l) => s + l.quantity, 0)
+    setMessage(`✓ Loaded ${t.lines.length} SKU line${t.lines.length !== 1 ? "s" : ""} (${units} units) from the template — review, then confirm.`)
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (lines.length === 0) { setMessage("Please add at least one product to the shipment."); return }
@@ -554,14 +565,25 @@ function ShipmentFlow({ destinations }) {
     setSubmitting(true)
     setMessage("")
     try {
-      await bulkRemoveInventory({
-        deductions: fullDeductions,
+      // Saved as a consignment: deducts the same components as before, but
+      // groups them under one record that can be edited or cancelled later
+      // (Consignments page) and tags each History entry with its number.
+      const res = await saveConsignment({
         destination,
-        remarks: remarks || undefined,
+        dispatch_date: entryDate,
+        reference,
+        notes: remarks,
+        corrugation_boxes: Number(corrugationBoxesUsed),
+        lines: lines.map((l) => ({
+          sku_key: l.productKey,
+          variant_key: l.variantKey || null,
+          quantity: l.qty,
+          label: lineLabel(l.productKey, l.variantKey),
+        })),
         images,
-        entry_date: entryDate,
       })
-      setMessage("✓ Shipment recorded successfully.")
+      setMessage(`✓ Consignment #${res.id} logged — stock deducted. Edit or cancel it on the Consignments page.`)
+      setReference("")
       setLines([])
       setActiveProductKey(null)
       setPendingVariant("")
@@ -595,6 +617,11 @@ function ShipmentFlow({ destinations }) {
 
       {/* LEFT — product cards */}
       <div className={twoPanel ? "lg:w-1/2" : "w-full"}>
+      <div className="mb-4 grid gap-3">
+        <ComponentMappingWarning />
+        <TemplateButtons destinations={destinations} onLoaded={loadTemplate} prefill={null} />
+      </div>
+
       {/* Step 1 — Product cards */}
       <div className="grid gap-3">
         <p className="text-sm font-semibold text-slate-700">
@@ -784,6 +811,11 @@ function ShipmentFlow({ destinations }) {
                   placeholder="e.g. 15" />
                 <p className="text-xs text-slate-500">This quantity will be deducted from Corrugation Box inventory</p>
               </div>
+              <label className="grid gap-2 text-sm font-medium text-slate-700">
+                Reference / AWB <span className="font-normal text-slate-400 text-xs">(optional)</span>
+                <input value={reference} onChange={(e) => setReference(e.target.value)}
+                  className="rounded-lg border border-slate-300 px-3 py-2" placeholder="AWB, PO or shipment ID" />
+              </label>
               <label className="grid gap-2 text-sm font-medium text-slate-700">
                 Remarks
                 <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)}

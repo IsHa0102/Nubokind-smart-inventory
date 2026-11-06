@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { fetchProducts } from "../api/inventoryApi"
-import { SHIPMENT_PRODUCTS, buildLineDeductions } from "../lib/shipmentConfig"
+import { SHIPMENT_PRODUCTS, buildLineDeductions, makeStockLookup } from "../lib/shipmentConfig"
 
 function getStatus(stock, threshold) {
   if (stock <= 0) return "Out of Stock"
@@ -53,8 +53,7 @@ export function GlobalSearch() {
     let fgCounts = {}
     try { fgCounts = JSON.parse(localStorage.getItem("nubo_fg_counts") || "{}") } catch {}
 
-    const nameToStock = {}
-    products.forEach((p) => { nameToStock[p.name] = p.stock ?? 0 })
+    const stockOf = makeStockLookup(products)
 
     const rows = []
     for (const sp of SHIPMENT_PRODUCTS) {
@@ -74,7 +73,7 @@ export function GlobalSearch() {
         if (components.length > 0) {
           let limiting = Infinity
           for (const c of components) {
-            const eff = Math.max(0, (nameToStock[c.name] ?? 0) - fg * c.quantity)
+            const eff = Math.max(0, stockOf(c.name) - fg * c.quantity)
             const can = Math.floor(eff / c.quantity)
             if (can < limiting) limiting = can
           }
@@ -83,7 +82,7 @@ export function GlobalSearch() {
         const componentStock = components.map((c) => ({
           name: c.name,
           qtyPerUnit: c.quantity,
-          stock: nameToStock[c.name] ?? 0,
+          stock: stockOf(c.name),
         }))
         rows.push({ label, masterId, rowKey, buildable, currentFg: fg, componentStock })
       }

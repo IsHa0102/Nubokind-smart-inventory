@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
+import { Link } from "react-router-dom"
 import { fetchInventoryEntries, fetchProducts, deleteInventoryEntry } from "../api/inventoryApi"
 
 const formatDate = (value) => {
@@ -125,7 +126,7 @@ function FullHistoryPage() {
       setMeta((prev) => ({ ...prev, total: prev.total - 1 }))
       setSelectedIds((prev) => { const next = new Set(prev); next.delete(id); return next })
     } catch (err) {
-      alert("Failed to delete entry. Please try again.")
+      alert(err?.message || "Failed to delete entry. Please try again.")
     } finally {
       setDeletingId(null)
       setConfirmId(null)
@@ -142,7 +143,7 @@ function FullHistoryPage() {
       setMeta((prev) => ({ ...prev, total: prev.total - ids.length }))
       setSelectedIds(new Set())
     } catch (err) {
-      alert("Failed to delete some entries. Please try again.")
+      alert(err?.message || "Failed to delete some entries. Please try again.")
     } finally {
       setBulkDeleting(false)
     }
@@ -156,14 +157,17 @@ function FullHistoryPage() {
     })
   }
 
-  const allSelected = entries.length > 0 && entries.every((e) => selectedIds.has(e.id))
-  const someSelected = entries.some((e) => selectedIds.has(e.id))
+  // Entries created by a consignment can only change through the consignment
+  // (edit / cancel), so they can't be selected or deleted here.
+  const deletable = entries.filter((e) => !e.consignment_id)
+  const allSelected = deletable.length > 0 && deletable.every((e) => selectedIds.has(e.id))
+  const someSelected = deletable.some((e) => selectedIds.has(e.id))
 
   const toggleSelectAll = () => {
     if (allSelected) {
       setSelectedIds(new Set())
     } else {
-      setSelectedIds(new Set(entries.map((e) => e.id)))
+      setSelectedIds(new Set(deletable.map((e) => e.id)))
     }
   }
 
@@ -324,12 +328,14 @@ function FullHistoryPage() {
                   return (
                     <tr key={entry.id} className={`${rowBg} hover:bg-indigo-50/40 border-b border-slate-200 transition-colors`}>
                       <td className="border-r border-slate-200 px-3 py-1.5">
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(entry.id)}
-                          onChange={() => toggleSelect(entry.id)}
-                          className="cursor-pointer"
-                        />
+                        {!entry.consignment_id && (
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(entry.id)}
+                            onChange={() => toggleSelect(entry.id)}
+                            className="cursor-pointer"
+                          />
+                        )}
                       </td>
                       <td className="border-r border-slate-200 px-3 py-1.5 text-xs text-slate-500 whitespace-nowrap tabular-nums">
                         {formatDate(entry.created_at)}
@@ -338,9 +344,19 @@ function FullHistoryPage() {
                         {entry.product_name}
                       </td>
                       <td className="border-r border-slate-200 px-3 py-1.5">
-                        <span className={`inline-flex rounded px-1.5 py-0.5 text-xs font-semibold ${typeColor}`}>
-                          {typeLabel}
-                        </span>
+                        <div className="flex flex-col items-start gap-1">
+                          <span className={`inline-flex rounded px-1.5 py-0.5 text-xs font-semibold ${typeColor}`}>
+                            {typeLabel}
+                          </span>
+                          {entry.consignment_id && (
+                            <Link
+                              to={`/planned-shipments?id=${entry.consignment_id}`}
+                              className="whitespace-nowrap rounded bg-indigo-50 px-1.5 py-0.5 text-[11px] font-semibold text-indigo-700 border border-indigo-200 hover:bg-indigo-100"
+                            >
+                              Consignment #{entry.consignment_id}
+                            </Link>
+                          )}
+                        </div>
                       </td>
                       <td className="border-r border-slate-200 px-3 py-1.5 text-right tabular-nums font-semibold text-slate-800 whitespace-nowrap">
                         {qty}
@@ -376,7 +392,14 @@ function FullHistoryPage() {
                       </td>
                       {/* Delete */}
                       <td className="px-3 py-1.5">
-                        {confirmId === entry.id ? (
+                        {entry.consignment_id ? (
+                          <span
+                            title="Part of a consignment — edit or cancel the consignment to change it"
+                            className="text-[11px] text-slate-400 whitespace-nowrap"
+                          >
+                            🔒 via consignment
+                          </span>
+                        ) : confirmId === entry.id ? (
                           <div className="flex items-center gap-1 whitespace-nowrap">
                             <button
                               onClick={() => handleDelete(entry.id)}

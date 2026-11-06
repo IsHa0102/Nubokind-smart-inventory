@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { createProduct, deleteProduct, updateProduct } from "../api/inventoryApi"
+import { createProduct, deleteProduct, setProductStock, updateProduct } from "../api/inventoryApi"
 import ConfirmModal from "./ConfirmModal"
 import EditModal from "./EditModal"
 
@@ -53,14 +53,18 @@ function ProductList({ products, onRefresh, addToast, search }) {
       await updateProduct(editTarget.id, {
         name: values.name,
         item_type: values.item_type || editTarget.item_type,
-        stock: Number(values.stock),
         low_stock_threshold: Number(values.low_stock_threshold),
       })
+      // Stock goes through its own RPC so the change is logged in History
+      // (as a Recount with before → after) instead of being overwritten silently.
+      if (Number(values.stock) !== Number(editTarget.stock)) {
+        await setProductStock(editTarget.id, Number(values.stock), "Admin stock edit")
+      }
       setEditTarget(null)
       onRefresh()
       addToast("Item updated successfully", "success")
     } catch (err) {
-      addToast(err?.response?.data?.message || "Failed to update item", "error")
+      addToast(err?.message || "Failed to update item", "error")
     } finally {
       setSaving(false)
     }

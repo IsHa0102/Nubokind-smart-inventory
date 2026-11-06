@@ -1,4 +1,5 @@
 import { supabase } from "./supabaseClient"
+import { buildAllDeductions, makeComponentResolver } from "../lib/shipmentConfig"
 
 const BUCKET = "inventory-images"
 
@@ -227,16 +228,26 @@ export const createInventoryEntry = async (formData) => {
 }
 
 // ── Name → ID resolution helper ───────────────────────────────────────────
+// Resolves by warehouse item_code first, then by name (see shipmentConfig), so
+// renaming an item in Admin doesn't break shipments. Reports every missing item
+// in one message instead of stopping at the first.
 async function resolveNamesToIds(items) {
-  const { data, error } = await supabase.from("warehouse_products").select("id, name")
+  const { data, error } = await supabase.from("warehouse_products").select("id, name, item_code")
   if (error) throw new Error(error.message)
-  const nameToId = {}
-  data.forEach((p) => { nameToId[p.name.toLowerCase()] = p.id })
-  return items.map(({ name, quantity }) => {
-    const product_id = nameToId[name.toLowerCase()]
-    if (!product_id) throw new Error(`Product "${name}" not found in inventory.`)
-    return { product_id, quantity }
+  const resolve = makeComponentResolver(data || [])
+  const missing = []
+  const resolved = items.map(({ name, quantity }) => {
+    const product = resolve(name)
+    if (!product) missing.push(name)
+    return { product_id: product?.id, quantity }
   })
+  if (missing.length) {
+    throw new Error(
+      `Not found in inventory: ${missing.join(", ")}. ` +
+      "Check the item name / item code in Admin → Products."
+    )
+  }
+  return resolved
 }
 
 // ── Bulk operations ────────────────────────────────────────────────────────
@@ -330,6 +341,22 @@ export const createPurchaseOrder = async (payload) => {
   return data
 }
 
+// Receiving a PO adds its units through the same RPC as Stock Entry → Add, so
+// the receipt shows in History with before/after stock.
+async function logPurchaseOrderReceipt(orderId, productId, quantity) {
+  const { error } = await supabase.rpc("warehouse_single_entry", {
+    p_product_id: Number(productId),
+    p_type: "add",
+    p_quantity: Number(quantity),
+    p_source: "Purchase Order",
+    p_destination: null,
+    p_remarks: `PO #${orderId} received`,
+    p_entry_date: null,
+    p_image_urls: [],
+  })
+  if (error) throw new Error(error.message)
+}
+
 export const updatePurchaseOrderStatus = async (id, status, updateStock = false) => {
   const { data: order, error: fetchErr } = await supabase
     .from("purchase_orders")
@@ -345,17 +372,7 @@ export const updatePurchaseOrderStatus = async (id, status, updateStock = false)
   if (error) throw new Error(error.message)
 
   if (updateStock && status === "received") {
-    const { data: product, error: pErr } = await supabase
-      .from("warehouse_products")
-      .select("stock")
-      .eq("id", order.product_id)
-      .single()
-    if (pErr) throw new Error(pErr.message)
-    const { error: sErr } = await supabase
-      .from("warehouse_products")
-      .update({ stock: product.stock + order.quantity_ordered })
-      .eq("id", order.product_id)
-    if (sErr) throw new Error(sErr.message)
+    await logPurchaseOrderReceipt(id, order.product_id, order.quantity_ordered)
   }
 }
 
@@ -400,17 +417,7 @@ export const updatePurchaseOrder = async (id, fields) => {
   if (error) throw new Error(error.message)
 
   if (!wasReceived && fields.status === "received") {
-    const { data: product, error: pErr } = await supabase
-      .from("warehouse_products")
-      .select("stock")
-      .eq("id", updated.product_id)
-      .single()
-    if (pErr) throw new Error(pErr.message)
-    const { error: sErr } = await supabase
-      .from("warehouse_products")
-      .update({ stock: product.stock + updated.quantity_ordered })
-      .eq("id", updated.product_id)
-    if (sErr) throw new Error(sErr.message)
+    await logPurchaseOrderReceipt(id, updated.product_id, updated.quantity_ordered)
   }
 }
 
@@ -429,10 +436,10 @@ export const fetchPlannedShipments = async () => {
   return data || []
 }
 
-export const createPlannedShipment = async ({ destination, notes, lines }) => {
+export const createPlannedShipment = async ({ destination, notes, planned_date, lines }) => {
   const { data: shipment, error: shipErr } = await supabase
     .from("warehouse_planned_shipments")
-    .insert({ destination, notes: notes || null })
+    .insert({ destination, notes: notes || null, planned_date: planned_date || null })
     .select()
     .single()
   if (shipErr) throw new Error(shipErr.message)
@@ -482,6 +489,62 @@ export const deletePlannedShipment = async (id) => {
     .delete()
     .eq("id", id)
   if (error) throw new Error(error.message)
+}
+
+// ── Consignments ────────────────────────────────────────────────────────────
+// A consignment is a warehouse_planned_shipments row with status "dispatched".
+// The RPC deducts components, links each History entry to the consignment and,
+// on edit, writes only the difference. id = null creates a new one; the id of a
+// planned order dispatches it; the id of a dispatched one edits it.
+//
+// lines: [{ sku_key, variant_key, quantity, label }]
+export const saveConsignment = async ({
+  id = null, destination, dispatch_date, reference, notes, corrugation_boxes, lines, images = [],
+}) => {
+  const components = buildAllDeductions(
+    lines.map((l) => ({ productKey: l.sku_key, variantKey: l.variant_key, qty: l.quantity }))
+  )
+  const corr = Number(corrugation_boxes) || 0
+  if (corr > 0) components.push({ name: "Corrugation Box", quantity: corr })
+
+  const [imageUrls, deductions] = await Promise.all([
+    uploadImages(images),
+    resolveNamesToIds(components),
+  ])
+
+  const { data, error } = await supabase.rpc("warehouse_save_consignment", {
+    p_id: id,
+    p_destination: destination,
+    p_dispatch_date: dispatch_date || null,
+    p_reference: reference || null,
+    p_notes: notes || null,
+    p_corrugation_boxes: corr,
+    p_lines: lines.map((l) => ({
+      sku_key: l.sku_key, variant_key: l.variant_key || null, quantity: Number(l.quantity), label: l.label,
+    })),
+    p_deductions: deductions,
+    p_image_urls: imageUrls,
+  })
+  if (error) throw new Error(error.message)
+  return data
+}
+
+// Dispatched → stock returned and record kept as "cancelled". Never-shipped plan → deleted.
+export const cancelConsignment = async (id) => {
+  const { data, error } = await supabase.rpc("warehouse_cancel_consignment", { p_id: id })
+  if (error) throw new Error(error.message)
+  return data
+}
+
+// Set an exact stock number and log it in History as a Recount.
+export const setProductStock = async (id, newStock, remarks) => {
+  const { data, error } = await supabase.rpc("warehouse_set_stock", {
+    p_product_id: id,
+    p_new_stock: Number(newStock),
+    p_remarks: remarks || null,
+  })
+  if (error) throw new Error(error.message)
+  return data
 }
 
 // ── Reports ────────────────────────────────────────────────────────────────
