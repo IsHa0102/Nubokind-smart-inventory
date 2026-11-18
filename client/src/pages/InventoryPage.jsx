@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { fetchProducts, updateProductCost } from "../api/inventoryApi"
 import { SHIPMENT_PRODUCTS, buildLineDeductions, makeStockLookup } from "../lib/shipmentConfig"
+import SheetSyncModal from "../components/SheetSyncModal"
 
 function getStatus(product) {
   if (product.stock <= 0) return "Out of Stock"
@@ -99,14 +100,25 @@ function InventoryPage() {
     localStorage.setItem("nubo_fg_counts", JSON.stringify(updated))
   }
 
-  useEffect(() => {
+  const [syncOpen, setSyncOpen] = useState(false)
+  const [syncNotice, setSyncNotice] = useState(null) // { type, text }
+
+  const loadProducts = () =>
     fetchProducts().then((data) => {
       setProducts(data)
       const c = {}
       data.forEach((p) => { c[p.id] = p.cost ?? "" })
       setCosts(c)
     })
-  }, [])
+
+  useEffect(() => { loadProducts() }, [])
+
+  const handleSynced = ({ updated, failed, countLabel }) => {
+    loadProducts()
+    setSyncNotice(failed
+      ? { type: "error", text: `Updated ${updated} item(s) from the ${countLabel} count, ${failed} failed. Run the sync again to retry.` }
+      : { type: "success", text: `Updated ${updated} item(s) from the warehouse sheet (${countLabel} count).` })
+  }
 
   const handleCostChange = (id, val) => {
     setCosts((prev) => ({ ...prev, [id]: val }))
@@ -181,6 +193,17 @@ function InventoryPage() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-slate-900">Inventory</h2>
+        <div className="flex items-center gap-2">
+        <button
+          onClick={() => { setSyncNotice(null); setSyncOpen(true) }}
+          className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 transition-colors"
+        >
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          Sync from Sheet
+        </button>
         <button
           onClick={downloadCSV}
           className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
@@ -191,7 +214,18 @@ function InventoryPage() {
           </svg>
           Download CSV
         </button>
+        </div>
       </div>
+
+      {syncNotice && (
+        <div className={`rounded-lg border px-4 py-3 text-sm ${syncNotice.type === "error"
+          ? "border-red-200 bg-red-50 text-red-700"
+          : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+          {syncNotice.text}
+        </div>
+      )}
+
+      <SheetSyncModal isOpen={syncOpen} onClose={() => setSyncOpen(false)} onApplied={handleSynced} />
 
       <div className="space-y-3">
         <div className="flex items-center gap-2">

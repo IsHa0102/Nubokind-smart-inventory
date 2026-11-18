@@ -547,6 +547,23 @@ export const setProductStock = async (id, newStock, remarks) => {
   return data
 }
 
+// Non-recount movements (add / remove / shipment) logged on or after a date.
+// Used by the sheet sync to warn when a count is older than recent activity.
+// Returns { [product_id]: number_of_movements }.
+export const fetchMovementCountsSince = async (productIds, sinceIso) => {
+  if (!productIds.length) return {}
+  const { data, error } = await supabase
+    .from("warehouse_entries")
+    .select("product_id")
+    .in("product_id", productIds)
+    .neq("type", "adjustment")
+    .gte("created_at", sinceIso)
+  if (error) throw new Error(error.message)
+  const counts = {}
+  for (const { product_id } of data || []) counts[product_id] = (counts[product_id] || 0) + 1
+  return counts
+}
+
 // ── Reports ────────────────────────────────────────────────────────────────
 export const fetchReportStats = async (params = {}) => {
   const { from, to, itemType } = params
