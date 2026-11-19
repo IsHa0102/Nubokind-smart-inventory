@@ -69,7 +69,10 @@ export const SHIPMENT_PRODUCTS = [
       { key: "sg_bp", label: "Ele Teether Green Pink",  masterId: "TE-EL-GR-PI-2", colors: ["Ele Sage Green Teether", "Ele Baby Pink Teether"] },
     ],
     fixedItems: ["Ele Monocarton Box"],
-    autoDeducts: [{ name: "Teether Thank You Card", multiplier: 1 }],
+    autoDeducts: [
+      { name: "Teether Thank You Card", multiplier: 1 },
+      { name: "Potli", multiplier: 1 },
+    ],
   },
   {
     key: "kiko",
