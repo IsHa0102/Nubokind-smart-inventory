@@ -320,15 +320,27 @@ export const fetchPurchaseOrders = async () => {
     .select(`
       *,
       warehouse_products(name),
-      warehouse_manufacturers(name)
+      warehouse_manufacturers(name),
+      purchase_order_receipts(id, quantity, received_on, notes, created_at)
     `)
     .order("created_at", { ascending: false })
   if (error) throw new Error(error.message)
-  return (data || []).map((o) => ({
-    ...o,
-    product_name:  o.warehouse_products?.name  ?? "Unknown",
-    supplier_name: o.warehouse_manufacturers?.name ?? null,
-  }))
+  return (data || []).map((o) => {
+    const received = o.quantity_received ?? 0
+    const receipts = [...(o.purchase_order_receipts ?? [])].sort((a, b) =>
+      a.received_on === b.received_on
+        ? a.created_at.localeCompare(b.created_at)
+        : a.received_on.localeCompare(b.received_on))
+    return {
+      ...o,
+      product_name:  o.warehouse_products?.name  ?? "Unknown",
+      supplier_name: o.warehouse_manufacturers?.name ?? null,
+      quantity_received: received,
+      // Still to come. A closed order has nothing to come, even if it closed short.
+      remaining: o.status === "received" ? 0 : Math.max(o.quantity_ordered - received, 0),
+      receipts,
+    }
+  })
 }
 
 export const createPurchaseOrder = async (payload) => {
@@ -341,83 +353,85 @@ export const createPurchaseOrder = async (payload) => {
   return data
 }
 
-// Receiving a PO adds its units through the same RPC as Stock Entry → Add, so
-// the receipt shows in History with before/after stock.
-async function logPurchaseOrderReceipt(orderId, productId, quantity) {
-  const { error } = await supabase.rpc("warehouse_single_entry", {
-    p_product_id: Number(productId),
-    p_type: "add",
+// Record one delivery against a PO (sql/004). The database function records the
+// receipt, moves quantity_received, closes the order when it is complete and
+// adds the units to stock through warehouse_single_entry — all in one
+// transaction, so the delivery shows in History with before/after stock and can
+// never be half-written. `close` = the supplier will send nothing more; with
+// quantity 0 it closes the order short without a delivery.
+export const receivePurchaseOrder = async (id, { quantity, receivedOn = null, notes = null, close = false }) => {
+  const { data, error } = await supabase.rpc("receive_purchase_order", {
+    p_order_id: Number(id),
     p_quantity: Number(quantity),
-    p_source: "Purchase Order",
-    p_destination: null,
-    p_remarks: `PO #${orderId} received`,
-    p_entry_date: null,
-    p_image_urls: [],
+    p_received_on: receivedOn || null,
+    p_notes: notes || null,
+    p_close: !!close,
   })
   if (error) throw new Error(error.message)
+  return data
 }
 
-export const updatePurchaseOrderStatus = async (id, status, updateStock = false) => {
-  const { data: order, error: fetchErr } = await supabase
-    .from("purchase_orders")
-    .select("product_id, quantity_ordered")
-    .eq("id", id)
-    .single()
-  if (fetchErr) throw new Error(fetchErr.message)
-
+// Ordered <-> In Transit only. Receiving always goes through
+// receivePurchaseOrder(), the one path that adds stock.
+export const updatePurchaseOrderStatus = async (id, status) => {
+  if (status === "received") throw new Error("Use Receive to record a delivery.")
   const { error } = await supabase
     .from("purchase_orders")
     .update({ status, updated_at: new Date().toISOString() })
     .eq("id", id)
   if (error) throw new Error(error.message)
-
-  if (updateStock && status === "received") {
-    await logPurchaseOrderReceipt(id, order.product_id, order.quantity_ordered)
-  }
 }
 
 // Edit any field of a purchase order.
 //
-// A received order has already added its units to warehouse_products.stock, so
-// its component, quantity and status are locked: editing the quantity afterwards
-// would leave stock out of step with the order, and there is no un-receive. Its
-// supplier, expected date and notes stay editable — they touch no stock.
-// Moving an open order to "received" through here adds its (possibly just
-// edited) quantity to stock, exactly as the Received button does.
+// Units already received are in warehouse_products.stock, so:
+//   - a closed order locks component, quantity and status (there is no
+//     un-receive); supplier, dates and notes stay editable — they touch no stock
+//   - an open order with deliveries locks the component (its stock went to that
+//     product) and cannot have its quantity cut below what already arrived
+// Moving an open order to "received" here receives everything still to come,
+// exactly as Receive with the full remaining quantity would.
 export const updatePurchaseOrder = async (id, fields) => {
   const { data: existing, error: fetchErr } = await supabase
     .from("purchase_orders")
-    .select("status")
+    .select("status, quantity_received")
     .eq("id", id)
     .single()
   if (fetchErr) throw new Error(fetchErr.message)
 
   const wasReceived = existing.status === "received"
+  const alreadyIn = existing.quantity_received ?? 0
+  if (!wasReceived && fields.quantity_ordered < alreadyIn) {
+    throw new Error(`${alreadyIn} units have already arrived — the order can't be less than that.`)
+  }
+
+  const common = {
+    supplier_id: fields.supplier_id,
+    order_date: fields.order_date,
+    expected_delivery_date: fields.expected_delivery_date,
+    notes: fields.notes,
+  }
   const patch = wasReceived
-    ? {
-        supplier_id: fields.supplier_id,
-        expected_delivery_date: fields.expected_delivery_date,
-        notes: fields.notes,
-      }
+    ? common
     : {
-        product_id: fields.product_id,
-        supplier_id: fields.supplier_id,
+        ...common,
+        ...(alreadyIn > 0 ? {} : { product_id: fields.product_id }),
         quantity_ordered: fields.quantity_ordered,
-        expected_delivery_date: fields.expected_delivery_date,
-        status: fields.status,
-        notes: fields.notes,
+        // "received" is never written here — receive_purchase_order() sets it.
+        ...(fields.status === "received" ? {} : { status: fields.status }),
       }
 
   const { data: updated, error } = await supabase
     .from("purchase_orders")
     .update({ ...patch, updated_at: new Date().toISOString() })
     .eq("id", id)
-    .select("product_id, quantity_ordered")
+    .select("quantity_ordered, quantity_received")
     .single()
   if (error) throw new Error(error.message)
 
   if (!wasReceived && fields.status === "received") {
-    await logPurchaseOrderReceipt(id, updated.product_id, updated.quantity_ordered)
+    const rest = updated.quantity_ordered - updated.quantity_received
+    await receivePurchaseOrder(id, { quantity: Math.max(rest, 0), close: true })
   }
 }
 
