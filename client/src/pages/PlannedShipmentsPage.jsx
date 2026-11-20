@@ -102,7 +102,7 @@ function FeasibilityCheck({ lines, corrugation = 0 }) {
   return (
     <div className="space-y-3">
       <div className={`rounded-lg px-4 py-3 text-sm font-medium ${allOk ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-rose-50 text-rose-700 border border-rose-200"}`}>
-        {allOk ? "Stock sufficient — can ship" : `Insufficient stock — ${shortages.length} item${shortages.length > 1 ? "s" : ""} short`}
+        {allOk ? "Stock sufficient — can ship" : `${shortages.length} item${shortages.length > 1 ? "s" : ""} short — logging still deducts everything; short items go into minus`}
       </div>
       <div className="overflow-x-auto rounded-lg border border-slate-200">
         <table className="min-w-full text-xs">
@@ -735,7 +735,11 @@ export default function PlannedShipmentsPage() {
     const res = await saveConsignment({ id, ...values })
     await refresh()
     select(res.id)
-    setFlash(
+    // Short items are still deducted (stock goes into minus, sql/007).
+    const short = res.short?.length
+      ? ` ⚠ Short: ${res.short.map((s) => `${s.name} ${s.stock}`).join(", ")} — shown in minus on Inventory until restocked or recounted.`
+      : ""
+    setFlash((
       res.status === "scheduled"
         ? (res.edited
           ? `✓ Consignment #${res.id} updated — ${res.entries_written} stock correction${res.entries_written !== 1 ? "s" : ""} logged. Ships ${formatPlainDate(res.dispatch_date)}.`
@@ -743,7 +747,7 @@ export default function PlannedShipmentsPage() {
         : res.edited
           ? `✓ Consignment #${res.id} updated — ${res.entries_written} stock correction${res.entries_written !== 1 ? "s" : ""} logged.`
           : `✓ Consignment #${res.id} dispatched — ${res.entries_written} item${res.entries_written !== 1 ? "s" : ""} deducted from stock and logged in History.`
-    )
+    ) + short)
   }
 
   const handleEditPlan = async ({ destination, planned_date, notes, lines }) => {
@@ -873,7 +877,7 @@ export default function PlannedShipmentsPage() {
     }
     return (
       <>
-        {flash && <p className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">{flash}</p>}
+        {flash && <p className={`mb-4 rounded-lg border px-3 py-2 text-sm font-medium ${flash.includes("⚠") ? "border-amber-200 bg-amber-50 text-amber-800" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{flash}</p>}
         <DetailPanel
           key={selected.id}
           shipment={selected}
@@ -903,7 +907,7 @@ export default function PlannedShipmentsPage() {
       <ComponentMappingWarning />
 
       {flash && !selected && view === null && (
-        <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">{flash}</p>
+        <p className={`rounded-lg border px-3 py-2 text-sm font-medium ${flash.includes("⚠") ? "border-amber-200 bg-amber-50 text-amber-800" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{flash}</p>
       )}
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">

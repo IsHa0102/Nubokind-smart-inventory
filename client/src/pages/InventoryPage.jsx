@@ -51,6 +51,7 @@ function SheetCells({ r, onReview }) {
 }
 
 function getStatus(product) {
+  if (product.stock < 0) return "Short"
   if (product.stock <= 0) return "Out of Stock"
   if (product.stock <= product.low_stock_threshold) return "Low Stock"
   return "Healthy"
@@ -60,6 +61,7 @@ const statusStyles = {
   "Healthy":      "bg-emerald-100 text-emerald-700",
   "Low Stock":    "bg-amber-100 text-amber-700",
   "Out of Stock": "bg-rose-100 text-rose-700",
+  "Short":        "bg-rose-600 text-white",
 }
 
 function packagingOrder(name) {
@@ -102,7 +104,7 @@ function InventoryTable({ items, emptyText, costs, onCostChange, onCostBlur, rec
                 <tr key={product.id} className="border-t border-slate-100 hover:bg-slate-50">
                   <td className="px-4 py-3 font-medium text-slate-900">{product.name}</td>
                   <td className="px-4 py-3 font-mono text-xs text-slate-400">{product.item_code ?? <span className="text-slate-200">—</span>}</td>
-                  <td className="px-4 py-3 tabular-nums font-semibold text-slate-800">{stock}</td>
+                  <td className={`px-4 py-3 tabular-nums font-semibold ${stock < 0 ? "text-rose-600" : "text-slate-800"}`}>{stock}</td>
                   <SheetCells r={recon[product.id]} onReview={onReview} />
                   <td className="px-4 py-3 tabular-nums text-slate-500">{product.low_stock_threshold}</td>
                   <td className="px-4 py-3">

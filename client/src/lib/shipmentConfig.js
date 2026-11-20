@@ -115,7 +115,7 @@ export const SHIPMENT_PRODUCTS = [
     ],
     autoDeducts: [
       { name: "Blue Box", multiplier: 1 },
-      { name: "Ribbon",   multiplier: 1 },
+      // Ribbon not deducted for now: warehouse counts it in rolls, usage per kit not fixed.
     ],
   },
   {
@@ -169,7 +169,7 @@ export const SHIPMENT_PRODUCTS = [
     fixedItems: [
       { name: "Flashcards", multiplier: 10 },
       "Banner",
-      { name: "Ribbon", multiplier: 1 },
+      // Ribbon not deducted for now (counted in rolls; see Sensory Kit).
       "Flashcard Kit Thank You Card",
       "Flashcard Kit Box",
     ],
