@@ -514,6 +514,7 @@ export const deletePlannedShipment = async (id) => {
 // lines: [{ sku_key, variant_key, quantity, label }]
 export const saveConsignment = async ({
   id = null, destination, dispatch_date, reference, notes, corrugation_boxes, lines, images = [],
+  source_document = null,
 }) => {
   const components = buildAllDeductions(
     lines.map((l) => ({ productKey: l.sku_key, variantKey: l.variant_key, qty: l.quantity }))
@@ -538,12 +539,35 @@ export const saveConsignment = async ({
     })),
     p_deductions: deductions,
     p_image_urls: imageUrls,
+    p_source_document: source_document || null,
   })
   if (error) throw new Error(error.message)
   return data
 }
 
-// Dispatched → stock returned and record kept as "cancelled". Never-shipped plan → deleted.
+// Mark scheduled consignments whose date has arrived as dispatched (sql/006:
+// stock was already deducted when they were logged; this only flips status).
+// Called once on app load; pages that show stock await the same promise so
+// they never render numbers from before the dispatch. Re-runs after 5 minutes
+// so a tab left open past midnight still picks up the new day.
+let dueRun = null
+let dueRunAt = 0
+export const runDueDispatches = () => {
+  if (!dueRun || Date.now() - dueRunAt > 5 * 60 * 1000) {
+    dueRunAt = Date.now()
+    dueRun = supabase.rpc("warehouse_dispatch_due_consignments").then(({ data, error }) => {
+      if (error) {
+        console.error("Auto-dispatch failed:", error.message)
+        return { dispatched: [], failed: [], error: error.message }
+      }
+      return data || { dispatched: [], failed: [] }
+    })
+  }
+  return dueRun
+}
+
+// Scheduled or dispatched → stock returned, kept as "cancelled".
+// Never-shipped legacy plan → deleted.
 export const cancelConsignment = async (id) => {
   const { data, error } = await supabase.rpc("warehouse_cancel_consignment", { p_id: id })
   if (error) throw new Error(error.message)
@@ -561,21 +585,55 @@ export const setProductStock = async (id, newStock, remarks) => {
   return data
 }
 
-// Non-recount movements (add / remove / shipment) logged on or after a date.
-// Used by the sheet sync to warn when a count is older than recent activity.
-// Returns { [product_id]: number_of_movements }.
-export const fetchMovementCountsSince = async (productIds, sinceIso) => {
-  if (!productIds.length) return {}
-  const { data, error } = await supabase
-    .from("warehouse_entries")
-    .select("product_id")
-    .in("product_id", productIds)
-    .neq("type", "adjustment")
-    .gte("created_at", sinceIso)
+// ── Warehouse sheet reconciliation (sql/005) ───────────────────────────────
+// counts: [{ product_id, stock, label, date: "YYYY-MM-DD" | null }]
+// Stores the sheet count next to system stock; never changes stock itself.
+export const recordSheetCounts = async (counts) => {
+  const { data, error } = await supabase.rpc("warehouse_record_sheet_counts", { p_counts: counts })
   if (error) throw new Error(error.message)
-  const counts = {}
-  for (const { product_id } of data || []) counts[product_id] = (counts[product_id] || 0) + 1
-  return counts
+  return data
+}
+
+// { [product_id]: { sheet_stock, sheet_count_label, sheet_count_date, sheet_synced_at,
+//                   sheet_status, moved_since, system_at_count, diff } }
+export const fetchSheetReconciliation = async () => {
+  const { data, error } = await supabase.rpc("warehouse_sheet_reconciliation")
+  if (error) throw new Error(error.message)
+  return Object.fromEntries((data || []).map((r) => [r.product_id, r]))
+}
+
+// action: "accept" (recount stock to the sheet, carried forward) | "ignore" (keep system)
+export const resolveSheetDiff = async (productId, action) => {
+  const { data, error } = await supabase.rpc("warehouse_resolve_sheet_diff", {
+    p_product_id: productId,
+    p_action: action,
+  })
+  if (error) throw new Error(error.message)
+  return data
+}
+
+// ── Delivery challan lookups ───────────────────────────────────────────────
+// Blinkit item id → master product id, and SKU matches people confirmed before.
+export const fetchChallanContext = async () => {
+  const [mapRes, aliasRes] = await Promise.all([
+    supabase.from("blinkit_item_map").select("item_id, product_id"),
+    supabase.from("warehouse_challan_aliases").select("platform, match_key, sku_key, variant_key"),
+  ])
+  // Both are hints only — a missing table must not block an upload.
+  if (mapRes.error) console.warn("blinkit_item_map:", mapRes.error.message)
+  if (aliasRes.error) console.warn("warehouse_challan_aliases:", aliasRes.error.message)
+  return {
+    blinkitMap: new Map((mapRes.data || []).filter((r) => r.product_id).map((r) => [String(r.item_id), r.product_id])),
+    aliases: new Map((aliasRes.data || []).map((a) => [`${a.platform}|${a.match_key}`, a])),
+  }
+}
+
+export const saveChallanAliases = async (aliases) => {
+  if (!aliases.length) return
+  const { error } = await supabase
+    .from("warehouse_challan_aliases")
+    .upsert(aliases.map((a) => ({ ...a, updated_at: new Date().toISOString() })), { onConflict: "platform,match_key" })
+  if (error) throw new Error(error.message)
 }
 
 // ── Reports ────────────────────────────────────────────────────────────────

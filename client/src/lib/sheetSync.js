@@ -3,9 +3,9 @@
 // The warehouse team records a stock count per date in the "Inventory Data" tab
 // (one row per count date, one column per item). The sheet is shared as
 // "anyone with the link", so the browser can read it through Google's CSV export
-// without credentials. We take the latest counted row and turn every difference
-// against current stock into an "adjustment" entry (which sets stock to an exact
-// value), so the change is recorded in History like any other stock edit.
+// without credentials. We take the latest counted row and store it next to
+// system stock (warehouse_products.sheet_*). Stock itself only changes when a
+// person accepts a difference on the Inventory page (sql/005).
 
 export const SHEET_ID = "1zuQaz3j7z3xuefDp4YoZKZlGzvlpD4WI_XBZHBN9LWs"
 export const SHEET_GID = "0" // "Inventory Data" tab
@@ -145,6 +145,21 @@ export function buildSyncPlan(rows, products, today = new Date()) {
   }
 
   return { countLabel, countDate, changes, unchanged, invalid, blank, unlinkedHeaders, missingProducts }
+}
+
+// Every linked item in the latest count, shaped for warehouse_record_sheet_counts().
+// Blank / non-numeric cells are sent as stock null, which clears an older count
+// so it can't be compared as if it were current. One row per item (two sheet
+// columns mapped to the same item: the last one wins).
+export function sheetCountsFromPlan(plan) {
+  const d = plan.countDate
+  const date = d
+    ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+    : null
+  const byId = new Map()
+  for (const c of [...plan.changes, ...plan.unchanged]) byId.set(c.product.id, c.next)
+  for (const c of [...plan.blank, ...plan.invalid]) if (!byId.has(c.product.id)) byId.set(c.product.id, null)
+  return [...byId].map(([product_id, stock]) => ({ product_id, stock, label: plan.countLabel, date }))
 }
 
 export async function fetchSheetRows() {

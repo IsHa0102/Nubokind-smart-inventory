@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import {
   fetchPlannedShipments,
-  createPlannedShipment,
   updatePlannedShipment,
   updatePlannedShipmentStatus,
   deletePlannedShipment,
@@ -10,28 +9,39 @@ import {
   fetchProducts,
   saveConsignment,
   cancelConsignment,
+  runDueDispatches,
+  saveChallanAliases,
 } from "../api/inventoryApi"
 import { SHIPMENT_PRODUCTS, buildAllDeductions, lineLabel, makeStockLookup } from "../lib/shipmentConfig"
 import { downloadConsignmentTemplate } from "../lib/consignmentTemplate"
 import TemplateButtons from "../components/ConsignmentTemplateButtons"
+import ChallanImport from "../components/ChallanImport"
 import ComponentMappingWarning from "../components/ComponentMappingWarning"
 
-// Lifecycle: pending → approved → dispatched (stock deducted) → cancelled (stock returned).
-// Only "dispatched" holds stock. Plans (pending / approved / rejected) touch nothing.
+// Lifecycle: stock is deducted the moment a consignment is logged.
+// scheduled (dispatch date still ahead) → dispatched (status flips on its date,
+// no stock moves then) → cancelled (stock returned). See sql/006.
+// pending / approved / rejected are legacy "plans": still shown and
+// dispatchable, but new plans can no longer be created.
 const statusStyles = {
   pending:    "bg-amber-100 text-amber-700",
   approved:   "bg-emerald-100 text-emerald-700",
   rejected:   "bg-rose-100 text-rose-700",
+  scheduled:  "bg-sky-100 text-sky-700",
   dispatched: "bg-indigo-100 text-indigo-700",
   cancelled:  "bg-slate-200 text-slate-600",
 }
 
 const statusLabel = {
   pending: "Pending", approved: "Approved", rejected: "Rejected",
-  dispatched: "Dispatched", cancelled: "Cancelled",
+  scheduled: "Scheduled", dispatched: "Dispatched", cancelled: "Cancelled",
 }
 
-const today = () => new Date().toISOString().split("T")[0]
+// Local (India) date, not UTC: toISOString() would give yesterday before 5:30 am.
+const today = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+}
 
 function formatDate(val) {
   return new Date(val).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
@@ -60,7 +70,7 @@ const linesOf = (s) =>
   }))
 
 // ── Feasibility Check ──────────────────────────────────────────────────────
-function FeasibilityCheck({ lines }) {
+function FeasibilityCheck({ lines, corrugation = 0 }) {
   const [stockByName, setStockByName] = useState(null)
   const hasLines = lines && lines.length > 0
 
@@ -76,12 +86,12 @@ function FeasibilityCheck({ lines }) {
 
   const result = useMemo(() => {
     if (!hasLines || !stockByName) return null
-    return componentsFor(lines, 0).map((r) => ({
+    return componentsFor(lines, corrugation).map((r) => ({
       ...r,
       stock: stockByName(r.name),
       ok: (stockByName(r.name)) >= r.quantity,
     }))
-  }, [hasLines, lines, stockByName])
+  }, [hasLines, lines, corrugation, stockByName])
 
   if (!hasLines) return <p className="text-xs text-slate-400">No components to check.</p>
   if (!result) return <p className="text-xs text-slate-400">Checking stock...</p>
@@ -126,8 +136,8 @@ function FeasibilityCheck({ lines }) {
 
 // ── Stock impact preview (dispatch mode) ───────────────────────────────────
 // New consignment: everything listed is deducted.
-// Editing a dispatched one: only the difference against what it already holds.
-function StockImpact({ lines, corrugation, original }) {
+// Editing a logged one: only the difference against what it already holds.
+function StockImpact({ lines, corrugation, original, scheduledFor }) {
   const rows = useMemo(() => {
     const next = Object.fromEntries(componentsFor(lines, corrugation).map((c) => [c.name, c.quantity]))
     const prev = original
@@ -144,7 +154,11 @@ function StockImpact({ lines, corrugation, original }) {
   return (
     <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
       <p className="text-sm font-semibold text-amber-800">
-        {original ? "Saving will change stock by:" : "Dispatching will deduct from inventory:"}
+        {original
+          ? "Saving will change stock by:"
+          : scheduledFor
+            ? `Logging deducts from inventory now (ships ${formatPlainDate(scheduledFor)}):`
+            : "Dispatching will deduct from inventory:"}
       </p>
       {rows.length === 0 ? (
         <p className="text-xs text-amber-700">No stock change — only the details are updated.</p>
@@ -166,8 +180,12 @@ function StockImpact({ lines, corrugation, original }) {
 
 // ── Shipment Form (plan / dispatch, create + edit) ─────────────────────────
 // mode "plan":     planned order, no stock change.
-// mode "dispatch": consignment; saving deducts stock (or the delta when editing).
-function ShipmentForm({ mode = "plan", destinations, initialValues = {}, original = null, onSubmit, onCancel, submitLabel }) {
+// mode "dispatch": consignment; saving deducts stock now (or the delta when
+//                  editing), whatever the date. A future date only means it
+//                  shows as Scheduled until then. `original` = what it already
+//                  holds (for the delta preview); `alreadySent` = dispatched,
+//                  so its date can't move into the future.
+function ShipmentForm({ mode = "plan", destinations, existing = [], initialValues = {}, original = null, alreadySent = false, onSubmit, onCancel, submitLabel }) {
   const isDispatch = mode === "dispatch"
   const [destination, setDestination] = useState(initialValues.destination ?? "")
   const [plannedDate, setPlannedDate] = useState(initialValues.planned_date ?? "")
@@ -182,8 +200,11 @@ function ShipmentForm({ mode = "plan", destinations, initialValues = {}, origina
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
   const [loadedNote, setLoadedNote] = useState("")
+  const [sourceDocument, setSourceDocument] = useState(null)
+  const [pendingAliases, setPendingAliases] = useState([])
 
   const selectedProduct = SHIPMENT_PRODUCTS.find((p) => p.key === productKey)
+  const isFuture = isDispatch && !!dispatchDate && dispatchDate > today()
 
   const addLine = () => {
     if (!productKey || !qty || Number(qty) <= 0) return
@@ -219,12 +240,26 @@ function ShipmentForm({ mode = "plan", destinations, initialValues = {}, origina
     setLoadedNote(`Loaded ${t.lines.length} SKU line${t.lines.length !== 1 ? "s" : ""} (${units} units) from the template.`)
   }
 
+  const onChallanApplied = (c) => {
+    if (c.destination) setDestination(c.destination)
+    if (c.dispatch_date) setDispatchDate(c.dispatch_date)
+    setReference(c.reference || "")
+    setNotes(c.notes || "")
+    if (c.corrugation_boxes !== null && c.corrugation_boxes !== undefined) setCorrugation(String(c.corrugation_boxes))
+    setLines(c.lines)
+    setSourceDocument(c.source_document)
+    setPendingAliases(c.aliases || [])
+    setError("")
+    setLoadedNote(`Filled from the challan: ${c.summary}. Check the details below, then confirm.`)
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!destination) { setError("Please select a destination."); return }
     if (lines.length === 0) { setError("Add at least one SKU line."); return }
     if (isDispatch) {
       if (!dispatchDate) { setError("Please enter the dispatch date."); return }
+      if (alreadySent && isFuture) { setError("This consignment is already dispatched — its date can't be in the future."); return }
       const c = Number(corrugation)
       if (corrugation === "" || !Number.isInteger(c) || c < 0) { setError("Enter the corrugation boxes used (0 if none)."); return }
     }
@@ -239,7 +274,13 @@ function ShipmentForm({ mode = "plan", destinations, initialValues = {}, origina
         corrugation_boxes: Number(corrugation) || 0,
         notes,
         lines,
+        source_document: sourceDocument,
       })
+      // Remember hand-made challan matches only now the consignment is saved.
+      // Best effort: the consignment is already in.
+      if (pendingAliases.length) {
+        saveChallanAliases(pendingAliases).catch((err) => console.warn("Could not save challan matches:", err.message))
+      }
     } catch (err) {
       setError(err.message)
     } finally {
@@ -252,6 +293,9 @@ function ShipmentForm({ mode = "plan", destinations, initialValues = {}, origina
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {isDispatch && !original && (
+        <ChallanImport destinations={destinations} existing={existing} onApply={onChallanApplied} />
+      )}
       <TemplateButtons
         destinations={destinations}
         onLoaded={onTemplateLoaded}
@@ -271,7 +315,18 @@ function ShipmentForm({ mode = "plan", destinations, initialValues = {}, origina
         {isDispatch ? (
           <div className="space-y-1">
             <label className="text-xs font-semibold text-slate-600">Dispatch Date *</label>
-            <input type="date" value={dispatchDate} max={today()} onChange={(e) => setDispatchDate(e.target.value)} className={inputCls} />
+            <input
+              type="date"
+              value={dispatchDate}
+              max={alreadySent ? today() : undefined}
+              onChange={(e) => setDispatchDate(e.target.value)}
+              className={inputCls}
+            />
+            {isFuture && !alreadySent && (
+              <p className="text-[11px] font-medium text-sky-700">
+                Future date — stock is deducted now; it shows as Scheduled and is marked dispatched on that day.
+              </p>
+            )}
           </div>
         ) : (
           <div className="space-y-1">
@@ -390,7 +445,9 @@ function ShipmentForm({ mode = "plan", destinations, initialValues = {}, origina
         )}
       </div>
 
-      {isDispatch && <StockImpact lines={lines} corrugation={corrugation} original={original} />}
+      {isDispatch && (
+        <StockImpact lines={lines} corrugation={corrugation} original={original} scheduledFor={isFuture ? dispatchDate : null} />
+      )}
 
       {error && <p className="text-sm text-rose-600">{error}</p>}
 
@@ -398,9 +455,10 @@ function ShipmentForm({ mode = "plan", destinations, initialValues = {}, origina
         <button
           type="submit"
           disabled={submitting}
-          className={`rounded-lg px-5 py-2 text-sm font-semibold text-white disabled:opacity-50 transition-colors ${isDispatch ? "bg-rose-600 hover:bg-rose-700" : "bg-indigo-600 hover:bg-indigo-700"}`}
+          className={`rounded-lg px-5 py-2 text-sm font-semibold text-white disabled:opacity-50 transition-colors ${
+            isFuture ? "bg-sky-600 hover:bg-sky-700" : isDispatch ? "bg-rose-600 hover:bg-rose-700" : "bg-indigo-600 hover:bg-indigo-700"}`}
         >
-          {submitting ? "Saving…" : submitLabel}
+          {submitting ? "Saving…" : isFuture && !original ? `Deduct Stock · Ships ${formatPlainDate(dispatchDate)}` : submitLabel}
         </button>
         <button type="button" onClick={onCancel} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 transition-colors">
           Cancel
@@ -420,7 +478,8 @@ function DetailPanel({ shipment, destinations, onStatusChange, onRemoved, onEdit
   const lines = useMemo(() => linesOf(shipment), [shipment])
   const isDispatched = shipment.status === "dispatched"
   const isCancelled = shipment.status === "cancelled"
-  const isPlan = !isDispatched && !isCancelled
+  const isScheduled = shipment.status === "scheduled"
+  const isPlan = !isDispatched && !isCancelled && !isScheduled
   const components = useMemo(
     () => componentsFor(lines, shipment.corrugation_boxes),
     [lines, shipment.corrugation_boxes]
@@ -459,10 +518,16 @@ function DetailPanel({ shipment, destinations, onStatusChange, onRemoved, onEdit
           {isPlan && shipment.planned_date && (
             <p className="mt-0.5 text-sm font-medium text-indigo-600">Ship by {formatPlainDate(shipment.planned_date)}</p>
           )}
-          {!isPlan && shipment.dispatch_date && (
+          {isScheduled && shipment.dispatch_date && (
+            <p className="mt-0.5 text-sm font-medium text-sky-700">
+              Ships {formatPlainDate(shipment.dispatch_date)} — stock already deducted; marked dispatched that day
+            </p>
+          )}
+          {(isDispatched || isCancelled) && shipment.dispatch_date && (
             <p className="mt-0.5 text-sm font-medium text-indigo-600">Dispatched {formatPlainDate(shipment.dispatch_date)}</p>
           )}
           {shipment.reference && <p className="mt-0.5 text-xs text-slate-500">Ref: <span className="font-mono">{shipment.reference}</span></p>}
+          {shipment.source_document && <p className="mt-0.5 text-xs text-slate-500">📄 {shipment.source_document}</p>}
           {shipment.notes && <p className="mt-1 text-sm text-slate-500">{shipment.notes}</p>}
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -490,8 +555,16 @@ function DetailPanel({ shipment, destinations, onStatusChange, onRemoved, onEdit
 
       {isCancelled && (
         <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-          Cancelled — all its stock was returned. The History entries stay for the record.
+          Cancelled — any stock it took was returned. The History entries stay for the record.
         </p>
+      )}
+
+      {isScheduled && shipment.dispatch_error && (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+          <p className="font-semibold">Stock for this consignment couldn't be deducted</p>
+          <p className="mt-0.5">{shipment.dispatch_error}</p>
+          <p className="mt-1 text-rose-600">Fix the stock (or the quantities), then open Edit and save it again.</p>
+        </div>
       )}
 
       {/* SKU lines */}
@@ -521,14 +594,14 @@ function DetailPanel({ shipment, destinations, onStatusChange, onRemoved, onEdit
           )}
       </div>
 
-      {/* Plan: feasibility. Dispatched: what it took out of stock. */}
+      {/* Plan: feasibility. Scheduled / dispatched: what it took out of stock. */}
       {isPlan ? (
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Stock Feasibility Check</p>
           <FeasibilityCheck lines={lines} />
           <p className="text-[11px] text-slate-400">Corrugation boxes are entered when you dispatch.</p>
         </div>
-      ) : isDispatched && (
+      ) : (isDispatched || isScheduled) && (
         <div className="space-y-1">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Deducted from inventory</p>
           <div className="overflow-hidden rounded-lg border border-slate-200 divide-y divide-slate-100">
@@ -563,6 +636,12 @@ function DetailPanel({ shipment, destinations, onStatusChange, onRemoved, onEdit
             Mark as Dispatched →
           </button>
         )}
+        {isScheduled && (
+          <button onClick={onDispatch} disabled={busy}
+            className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50">
+            Dispatch now →
+          </button>
+        )}
       </div>
 
       {error && <p className="text-sm text-rose-600">{error}</p>}
@@ -579,7 +658,11 @@ function DetailPanel({ shipment, destinations, onStatusChange, onRemoved, onEdit
         )}
         {confirm === "cancel" && (
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-slate-600">Cancel consignment #{shipment.id}? All its units go back into stock.</span>
+            <span className="text-xs text-slate-600">
+              {isScheduled
+                ? `Cancel consignment #${shipment.id} before it ships? All its units go back into stock.`
+                : `Cancel consignment #${shipment.id}? All its units go back into stock.`}
+            </span>
             <button onClick={handleCancel} disabled={busy} className="rounded px-2.5 py-1 text-xs font-semibold bg-rose-500 text-white hover:bg-rose-600 disabled:opacity-50">
               {busy ? "…" : "Yes, cancel it"}
             </button>
@@ -590,6 +673,9 @@ function DetailPanel({ shipment, destinations, onStatusChange, onRemoved, onEdit
           <button onClick={() => setConfirm("delete")} className="text-xs text-rose-500 hover:text-rose-700">Delete plan</button>
         )}
         {!confirm && isDispatched && (
+          <button onClick={() => setConfirm("cancel")} className="text-xs text-rose-500 hover:text-rose-700">Cancel consignment (return stock)</button>
+        )}
+        {!confirm && isScheduled && (
           <button onClick={() => setConfirm("cancel")} className="text-xs text-rose-500 hover:text-rose-700">Cancel consignment (return stock)</button>
         )}
       </div>
@@ -604,16 +690,29 @@ export default function PlannedShipmentsPage() {
   const [destinations, setDestinations] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedId, setSelectedId] = useState(() => Number(searchParams.get("id")) || null)
-  // null | "new-plan" | "new-consignment" | "edit" | "dispatch"
+  // null | "new-consignment" | "edit" | "dispatch"
   const [view, setView] = useState(null)
   const [flash, setFlash] = useState("")
 
   useEffect(() => {
-    Promise.all([fetchPlannedShipments(), fetchDestinations()]).then(([s, d]) => {
-      setShipments(s)
-      setDestinations(d)
-      setLoading(false)
-    })
+    // Dispatch anything due today before listing, so statuses are current.
+    runDueDispatches()
+      .then((due) => {
+        // The run is cached for a few minutes; announce its result only once.
+        if (due.announced) return
+        due.announced = true
+        const parts = []
+        if (due.dispatched?.length) parts.push(`✓ Auto-dispatched today: ${due.dispatched.map((d) => `#${d.id}`).join(", ")}.`)
+        if (due.failed?.length) parts.push(`⚠ Couldn't auto-dispatch ${due.failed.map((d) => `#${d.id}`).join(", ")} — open it to see why.`)
+        if (parts.length) setFlash(parts.join(" "))
+      })
+      .then(() => Promise.all([fetchPlannedShipments(), fetchDestinations()]))
+      .then(([s, d]) => {
+        setShipments(s)
+        setDestinations(d)
+      })
+      .catch((e) => setFlash(`⚠ Couldn't load consignments: ${e.message}`))
+      .finally(() => setLoading(false))
   }, [])
 
   const selected = shipments.find((s) => s.id === selectedId)
@@ -631,20 +730,19 @@ export default function PlannedShipmentsPage() {
     return fresh
   }
 
-  const handleCreatePlan = async ({ destination, planned_date, notes, lines }) => {
-    const created = await createPlannedShipment({ destination, planned_date, notes, lines })
-    await refresh()
-    select(created.id)
-  }
 
   const handleSaveConsignment = (id) => async (values) => {
     const res = await saveConsignment({ id, ...values })
     await refresh()
     select(res.id)
     setFlash(
-      res.edited
-        ? `✓ Consignment #${res.id} updated — ${res.entries_written} stock correction${res.entries_written !== 1 ? "s" : ""} logged.`
-        : `✓ Consignment #${res.id} dispatched — ${res.entries_written} item${res.entries_written !== 1 ? "s" : ""} deducted from stock.`
+      res.status === "scheduled"
+        ? (res.edited
+          ? `✓ Consignment #${res.id} updated — ${res.entries_written} stock correction${res.entries_written !== 1 ? "s" : ""} logged. Ships ${formatPlainDate(res.dispatch_date)}.`
+          : `✓ Consignment #${res.id} logged — ${res.entries_written} item${res.entries_written !== 1 ? "s" : ""} deducted from stock and logged in History. Ships ${formatPlainDate(res.dispatch_date)}.`)
+        : res.edited
+          ? `✓ Consignment #${res.id} updated — ${res.entries_written} stock correction${res.entries_written !== 1 ? "s" : ""} logged.`
+          : `✓ Consignment #${res.id} dispatched — ${res.entries_written} item${res.entries_written !== 1 ? "s" : ""} deducted from stock and logged in History.`
     )
   }
 
@@ -654,10 +752,11 @@ export default function PlannedShipmentsPage() {
     setView(null)
   }
 
+  const byDispatchDate = (a, b) => String(a.dispatch_date).localeCompare(String(b.dispatch_date)) || a.id - b.id
   const groups = [
-    ["Pending", shipments.filter((s) => s.status === "pending")],
-    ["Approved — ready to dispatch", shipments.filter((s) => s.status === "approved")],
+    ["Scheduled", shipments.filter((s) => s.status === "scheduled").sort(byDispatchDate)],
     ["Dispatched", shipments.filter((s) => s.status === "dispatched")],
+    ["Older plans", shipments.filter((s) => s.status === "pending" || s.status === "approved")],
     ["Rejected", shipments.filter((s) => s.status === "rejected")],
     ["Cancelled", shipments.filter((s) => s.status === "cancelled")],
   ]
@@ -665,9 +764,11 @@ export default function PlannedShipmentsPage() {
   const renderCard = (s) => {
     const lines = s.warehouse_planned_shipment_lines || []
     const units = lines.reduce((sum, l) => sum + (l.quantity || 0), 0)
-    const dateLine = s.status === "dispatched" || s.status === "cancelled"
-      ? (s.dispatch_date ? `Dispatched ${formatPlainDate(s.dispatch_date)}` : formatDate(s.created_at))
-      : (s.planned_date ? `Ship by ${formatPlainDate(s.planned_date)}` : formatDate(s.created_at))
+    const dateLine = s.status === "scheduled"
+      ? `${s.dispatch_error ? "⚠ Overdue — " : "Ships "}${formatPlainDate(s.dispatch_date)}`
+      : s.status === "dispatched" || s.status === "cancelled"
+        ? (s.dispatch_date ? `Dispatched ${formatPlainDate(s.dispatch_date)}` : formatDate(s.created_at))
+        : (s.planned_date ? `Ship by ${formatPlainDate(s.planned_date)}` : formatDate(s.created_at))
     return (
       <button
         key={s.id}
@@ -681,7 +782,7 @@ export default function PlannedShipmentsPage() {
             <p className="text-sm font-semibold text-slate-900 truncate">
               <span className="text-slate-400 font-normal">#{s.id}</span> {s.destination}
             </p>
-            <p className="text-xs font-medium text-indigo-500 mt-0.5">{dateLine}</p>
+            <p className={`text-xs font-medium mt-0.5 ${s.dispatch_error && s.status === "scheduled" ? "text-rose-600" : "text-indigo-500"}`}>{dateLine}</p>
             <p className="text-xs text-slate-400 mt-0.5">{lines.length} SKU{lines.length !== 1 ? "s" : ""} · {units} units</p>
           </div>
           <span className={`shrink-0 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusStyles[s.status] || ""}`}>
@@ -703,38 +804,43 @@ export default function PlannedShipmentsPage() {
   } : {}
 
   const renderRight = () => {
-    if (view === "new-plan") {
-      return (
-        <div className="space-y-4">
-          <h3 className="text-base font-bold text-slate-900">Plan an Order <span className="text-xs font-normal text-slate-400">— no stock change until dispatched</span></h3>
-          <ShipmentForm mode="plan" destinations={destinations} onSubmit={handleCreatePlan} onCancel={() => setView(null)} submitLabel="Save Plan" />
-        </div>
-      )
-    }
     if (view === "new-consignment") {
       return (
         <div className="space-y-4">
-          <h3 className="text-base font-bold text-slate-900">Log a Dispatched Consignment</h3>
-          <ShipmentForm mode="dispatch" destinations={destinations} onSubmit={handleSaveConsignment(null)} onCancel={() => setView(null)} submitLabel="Confirm Dispatch & Deduct Stock" />
+          <h3 className="text-base font-bold text-slate-900">
+            Log a Consignment <span className="text-xs font-normal text-slate-400">— stock is deducted as soon as you log it</span>
+          </h3>
+          <ShipmentForm
+            mode="dispatch"
+            destinations={destinations}
+            existing={shipments}
+            onSubmit={handleSaveConsignment(null)}
+            onCancel={() => setView(null)}
+            submitLabel="Confirm Dispatch & Deduct Stock"
+          />
         </div>
       )
     }
     if (!selected) {
       return (
         <div className="flex h-48 items-center justify-center text-sm text-slate-400 text-center px-6">
-          Select a consignment, or log a new one. Upload the Excel template to fill the form in one go.
+          Select a consignment, or log a new one. Upload a delivery challan PDF or the Excel template to fill the form in one go.
         </div>
       )
     }
     if (view === "dispatch") {
       return (
         <div className="space-y-4">
-          <h3 className="text-base font-bold text-slate-900">Dispatch Plan #{selected.id} — {selected.destination}</h3>
+          <h3 className="text-base font-bold text-slate-900">
+            Dispatch {selected.status === "scheduled" ? "Consignment" : "Plan"} #{selected.id} now — {selected.destination}
+          </h3>
           <ShipmentForm
             key={`dispatch-${selected.id}`}
             mode="dispatch"
             destinations={destinations}
+            existing={shipments}
             initialValues={{ ...selectedValues, dispatch_date: today() }}
+            original={selected.status === "scheduled" ? { lines: selectedValues.lines, corrugation: selected.corrugation_boxes } : null}
             onSubmit={handleSaveConsignment(selected.id)}
             onCancel={() => setView(null)}
             submitLabel="Confirm Dispatch & Deduct Stock"
@@ -744,20 +850,23 @@ export default function PlannedShipmentsPage() {
     }
     if (view === "edit") {
       const dispatched = selected.status === "dispatched"
+      const scheduled = selected.status === "scheduled"
       return (
         <div className="space-y-4">
           <h3 className="text-base font-bold text-slate-900">
-            Edit {dispatched ? "Consignment" : "Plan"} #{selected.id} — {selected.destination}
+            Edit {dispatched || scheduled ? "Consignment" : "Plan"} #{selected.id} — {selected.destination}
           </h3>
           <ShipmentForm
             key={`edit-${selected.id}`}
-            mode={dispatched ? "dispatch" : "plan"}
+            mode={dispatched || scheduled ? "dispatch" : "plan"}
             destinations={destinations}
+            existing={shipments}
             initialValues={selectedValues}
-            original={dispatched ? { lines: selectedValues.lines, corrugation: selected.corrugation_boxes } : null}
-            onSubmit={dispatched ? handleSaveConsignment(selected.id) : handleEditPlan}
+            original={dispatched || scheduled ? { lines: selectedValues.lines, corrugation: selected.corrugation_boxes } : null}
+            alreadySent={dispatched}
+            onSubmit={dispatched || scheduled ? handleSaveConsignment(selected.id) : handleEditPlan}
             onCancel={() => setView(null)}
-            submitLabel={dispatched ? "Save & Correct Stock" : "Save Changes"}
+            submitLabel={dispatched || scheduled ? "Save & Correct Stock" : "Save Changes"}
           />
         </div>
       )
@@ -773,7 +882,10 @@ export default function PlannedShipmentsPage() {
           onRemoved={(id) => { setShipments((prev) => prev.filter((s) => s.id !== id)); select(null) }}
           onEdit={() => { setView("edit"); setFlash("") }}
           onDispatch={() => { setView("dispatch"); setFlash("") }}
-          onCancelled={async () => { await refresh(); setFlash(`✓ Consignment #${selected.id} cancelled — stock returned.`) }}
+          onCancelled={async () => {
+            await refresh()
+            setFlash(`✓ Consignment #${selected.id} cancelled — stock returned.`)
+          }}
         />
       </>
     )
@@ -783,28 +895,26 @@ export default function PlannedShipmentsPage() {
     <div className="space-y-4">
       <div>
         <h2 className="text-2xl font-bold text-slate-900">Consignments</h2>
-        <p className="text-sm text-slate-500">Plan orders, then dispatch them — dispatching deducts stock and logs it in History.</p>
+        <p className="text-sm text-slate-500">
+          Every consignment deducts its components from stock and logs them in History as soon as it is logged. Future-dated ones show as Scheduled until their dispatch date.
+        </p>
       </div>
 
       <ComponentMappingWarning />
 
+      {flash && !selected && view === null && (
+        <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">{flash}</p>
+      )}
+
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
         {/* Left: list */}
         <div className="w-full lg:w-72 shrink-0 space-y-3">
-          <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
-            <button
-              onClick={() => { setView("new-consignment"); setSelectedId(null); setFlash("") }}
-              className="w-full rounded-xl bg-rose-600 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 transition-colors"
-            >
-              + Log Consignment
-            </button>
-            <button
-              onClick={() => { setView("new-plan"); setSelectedId(null); setFlash("") }}
-              className="w-full rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50 py-2 text-sm font-semibold text-indigo-600 hover:bg-indigo-100 hover:border-indigo-400 transition-colors"
-            >
-              + Plan an Order
-            </button>
-          </div>
+          <button
+            onClick={() => { setView("new-consignment"); setSelectedId(null); setFlash("") }}
+            className="w-full rounded-xl bg-rose-600 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 transition-colors"
+          >
+            + Log Consignment
+          </button>
 
           {loading && <p className="text-sm text-slate-400 px-1">Loading…</p>}
           {!loading && shipments.length === 0 && <p className="text-sm text-slate-400 px-1">Nothing here yet.</p>}

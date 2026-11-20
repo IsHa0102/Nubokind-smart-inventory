@@ -100,7 +100,7 @@ const BLUE_BOX_CARD = {
 
 // ── Corrugation flow component ─────────────────────────────────────────────
 function CorrugationFlow({ manufacturers }) {
-  const today = new Date().toISOString().split("T")[0]
+  const today = new Date().toLocaleDateString("en-CA") // local YYYY-MM-DD (toISOString is UTC)
   const [boxes, setBoxes] = useState("")
   const [source, setSource] = useState("")
   const [remarks, setRemarks] = useState("")
@@ -221,7 +221,7 @@ function CorrugationFlow({ manufacturers }) {
 
 // ── Blue Box flow component ────────────────────────────────────────────────
 function BlueBoxFlow({ manufacturers }) {
-  const today = new Date().toISOString().split("T")[0]
+  const today = new Date().toLocaleDateString("en-CA") // local YYYY-MM-DD (toISOString is UTC)
   const [qty, setQty] = useState("")
   const [source, setSource] = useState("")
   const [remarks, setRemarks] = useState("")
@@ -428,7 +428,7 @@ function ShipmentProductCard({ item, isActive, lineCount, onClick }) {
 
 // ── Shipment flow — multi-product packing interface ───────────────────────
 function ShipmentFlow({ destinations }) {
-  const today = new Date().toISOString().split("T")[0]
+  const today = new Date().toLocaleDateString("en-CA") // local YYYY-MM-DD (toISOString is UTC)
 
   // Shipment lines: [{id, productKey, variantKey, qty}]
   const [lines, setLines] = useState([])
@@ -922,7 +922,7 @@ function StockEntryPage() {
   const [destinations, setDestinations] = useState([])
   const [message, setMessage] = useState("")
   const [selectedCatalogueKey, setSelectedCatalogueKey] = useState(null)
-  const today = new Date().toISOString().split("T")[0]
+  const today = new Date().toLocaleDateString("en-CA") // local YYYY-MM-DD (toISOString is UTC)
   const [form, setForm] = useState({
     product_id: "",
     type: "add",

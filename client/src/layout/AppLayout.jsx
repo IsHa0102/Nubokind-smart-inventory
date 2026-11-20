@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { NavLink, Outlet } from "react-router-dom"
 import { GlobalSearch } from "../components/GlobalSearch"
+import { runDueDispatches } from "../api/inventoryApi"
 
 const links = [
   { to: "/reports",            label: "Reports" },
@@ -14,6 +15,10 @@ const links = [
 
 function AppLayout() {
   const [scrolled, setScrolled] = useState(false)
+
+  // Scheduled consignments whose date has come are dispatched (stock deducted)
+  // the first time anyone opens the app that day.
+  useEffect(() => { runDueDispatches() }, [])
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10)

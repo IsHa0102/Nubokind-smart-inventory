@@ -1,7 +1,54 @@
-import { useEffect, useMemo, useState } from "react"
-import { fetchProducts, updateProductCost } from "../api/inventoryApi"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import {
+  fetchProducts, updateProductCost, runDueDispatches,
+  fetchSheetReconciliation, recordSheetCounts,
+} from "../api/inventoryApi"
 import { SHIPMENT_PRODUCTS, buildLineDeductions, makeStockLookup } from "../lib/shipmentConfig"
-import SheetSyncModal from "../components/SheetSyncModal"
+import { buildSyncPlan, fetchSheetRows, sheetCountsFromPlan } from "../lib/sheetSync"
+import SheetReconcileModal from "../components/SheetReconcileModal"
+
+// Sheet column cell: the sheet count, and how it compares with system stock at
+// the count date (see SheetReconcileModal / sql/005).
+function SheetCells({ r, onReview }) {
+  if (!r) {
+    return (
+      <>
+        <td className="px-4 py-3 text-slate-300">—</td>
+        <td className="px-4 py-3 text-slate-300">—</td>
+      </>
+    )
+  }
+  let diffCell
+  if (r.superseded) {
+    diffCell = <span className="text-xs text-slate-400" title="Recounted in the app after the sheet count — the newer recount is used">Recounted since</span>
+  } else if (r.diff === 0) {
+    diffCell = <span className="text-xs font-medium text-emerald-600">✓ Match</span>
+  } else if (r.sheet_status === "accepted") {
+    diffCell = <span className="text-xs font-medium text-slate-500" title={`Sheet differed by ${r.diff}; stock was set to the sheet`}>✓ Synced</span>
+  } else if (r.sheet_status === "ignored") {
+    diffCell = <span className="text-xs text-slate-400" title="Reviewed — system number kept">{r.diff > 0 ? `+${r.diff}` : r.diff} kept</span>
+  } else {
+    diffCell = (
+      <button
+        onClick={onReview}
+        title="System stock differs from the sheet count — review"
+        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums ${
+          r.diff > 0 ? "bg-amber-100 text-amber-800 hover:bg-amber-200" : "bg-rose-100 text-rose-700 hover:bg-rose-200"}`}
+      >
+        ⚑ {r.diff > 0 ? `+${r.diff}` : r.diff}
+      </button>
+    )
+  }
+  return (
+    <>
+      <td className="px-4 py-3 tabular-nums text-slate-700">
+        {r.sheet_stock}
+        {r.sheet_count_label && <span className="ml-1 text-[10px] text-slate-400">{r.sheet_count_label}</span>}
+      </td>
+      <td className="px-4 py-3">{diffCell}</td>
+    </>
+  )
+}
 
 function getStatus(product) {
   if (product.stock <= 0) return "Out of Stock"
@@ -23,7 +70,7 @@ function packagingOrder(name) {
   return 4
 }
 
-function InventoryTable({ items, emptyText, costs, onCostChange, onCostBlur }) {
+function InventoryTable({ items, emptyText, costs, onCostChange, onCostBlur, recon, onReview }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
       <table className="min-w-full text-left text-sm">
@@ -31,7 +78,9 @@ function InventoryTable({ items, emptyText, costs, onCostChange, onCostBlur }) {
           <tr className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             <th className="px-4 py-3">Item</th>
             <th className="px-4 py-3">Item ID</th>
-            <th className="px-4 py-3">Stock</th>
+            <th className="px-4 py-3" title="Calculated from every entry and consignment logged in the app">System Stock</th>
+            <th className="px-4 py-3" title="Latest count in the warehouse Google Sheet">Sheet Stock</th>
+            <th className="px-4 py-3" title="Sheet count vs system stock on the count date">Diff</th>
             <th className="px-4 py-3">Low Stock Threshold</th>
             <th className="px-4 py-3">Status</th>
             <th className="px-4 py-3">Cost (₹)</th>
@@ -41,7 +90,7 @@ function InventoryTable({ items, emptyText, costs, onCostChange, onCostBlur }) {
         <tbody>
           {items.length === 0 ? (
             <tr>
-              <td className="px-4 py-8 text-center text-slate-400" colSpan="7">{emptyText}</td>
+              <td className="px-4 py-8 text-center text-slate-400" colSpan="9">{emptyText}</td>
             </tr>
           ) : (
             items.map((product) => {
@@ -53,7 +102,8 @@ function InventoryTable({ items, emptyText, costs, onCostChange, onCostBlur }) {
                 <tr key={product.id} className="border-t border-slate-100 hover:bg-slate-50">
                   <td className="px-4 py-3 font-medium text-slate-900">{product.name}</td>
                   <td className="px-4 py-3 font-mono text-xs text-slate-400">{product.item_code ?? <span className="text-slate-200">—</span>}</td>
-                  <td className="px-4 py-3 tabular-nums text-slate-700">{stock}</td>
+                  <td className="px-4 py-3 tabular-nums font-semibold text-slate-800">{stock}</td>
+                  <SheetCells r={recon[product.id]} onReview={onReview} />
                   <td className="px-4 py-3 tabular-nums text-slate-500">{product.low_stock_threshold}</td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyles[status]}`}>
@@ -100,25 +150,51 @@ function InventoryPage() {
     localStorage.setItem("nubo_fg_counts", JSON.stringify(updated))
   }
 
-  const [syncOpen, setSyncOpen] = useState(false)
-  const [syncNotice, setSyncNotice] = useState(null) // { type, text }
+  const [reviewOpen, setReviewOpen] = useState(false)
+  const [recon, setRecon] = useState({})       // product_id → sheet reconciliation row
+  const [sheetPlan, setSheetPlan] = useState(null)
+  const [sheetState, setSheetState] = useState({ status: "idle", error: "" }) // idle | syncing | ok | error
 
-  const loadProducts = () =>
-    fetchProducts().then((data) => {
-      setProducts(data)
-      const c = {}
-      data.forEach((p) => { c[p.id] = p.cost ?? "" })
-      setCosts(c)
-    })
+  const loadProducts = useCallback(async () => {
+    const [data, rec] = await Promise.all([
+      fetchProducts(),
+      fetchSheetReconciliation().catch((e) => { console.warn(e.message); return {} }),
+    ])
+    setProducts(data)
+    setRecon(rec)
+    const c = {}
+    data.forEach((p) => { c[p.id] = p.cost ?? "" })
+    setCosts(c)
+    return data
+  }, [])
 
-  useEffect(() => { loadProducts() }, [])
+  // Pull the latest count from the warehouse sheet and store it beside system
+  // stock. Never changes stock — differences are reviewed and confirmed.
+  const syncSheet = useCallback(async (currentProducts) => {
+    setSheetState({ status: "syncing", error: "" })
+    try {
+      const rows = await fetchSheetRows()
+      const plan = buildSyncPlan(rows, currentProducts)
+      await recordSheetCounts(sheetCountsFromPlan(plan))
+      setSheetPlan(plan)
+      setRecon(await fetchSheetReconciliation())
+      setSheetState({ status: "ok", error: "" })
+    } catch (e) {
+      setSheetState({ status: "error", error: e.message || String(e) })
+    }
+  }, [])
 
-  const handleSynced = ({ updated, failed, countLabel }) => {
-    loadProducts()
-    setSyncNotice(failed
-      ? { type: "error", text: `Updated ${updated} item(s) from the ${countLabel} count, ${failed} failed. Run the sync again to retry.` }
-      : { type: "success", text: `Updated ${updated} item(s) from the warehouse sheet (${countLabel} count).` })
-  }
+  useEffect(() => {
+    // Due scheduled consignments first, so System Stock already reflects them.
+    runDueDispatches()
+      .then(loadProducts)
+      .then(syncSheet)
+      .catch((e) => setSheetState({ status: "error", error: `Couldn't load inventory: ${e.message}` }))
+  }, [loadProducts, syncSheet])
+
+  const openDiffs = products.filter((p) => recon[p.id] && recon[p.id].diff !== 0 && recon[p.id].sheet_status === "open")
+  const lastSynced = Object.values(recon).map((r) => r.sheet_synced_at).filter(Boolean).sort().pop()
+  const countLabel = Object.values(recon).find((r) => r.sheet_count_label)?.sheet_count_label
 
   const handleCostChange = (id, val) => {
     setCosts((prev) => ({ ...prev, [id]: val }))
@@ -175,11 +251,13 @@ function InventoryPage() {
 
   const downloadCSV = () => {
     const today = new Date().toISOString().split("T")[0]
-    const header = ["Item", "Item Type", "Stock", "Low Stock Threshold", "Status", "Cost (INR)", "Total Cost (INR)"]
+    const header = ["Item", "Item Type", "System Stock", "Sheet Stock", "Sheet Count", "Diff", "Low Stock Threshold", "Status", "Cost (INR)", "Total Cost (INR)"]
     const csvRows = [...productItems, ...packagingItems].map((p) => {
       const cost  = Number(costs[p.id] ?? 0)
       const total = cost > 0 && (p.stock ?? 0) > 0 ? cost * p.stock : ""
-      return [`"${p.name}"`, `"${p.item_type || ""}"`, p.stock ?? 0, p.low_stock_threshold ?? 0, `"${getStatus(p)}"`, cost || "", total]
+      const r = recon[p.id]
+      return [`"${p.name}"`, `"${p.item_type || ""}"`, p.stock ?? 0, r?.sheet_stock ?? "", `"${r?.sheet_count_label ?? ""}"`, r?.diff ?? "",
+        p.low_stock_threshold ?? 0, `"${getStatus(p)}"`, cost || "", total]
     })
     const csv = [header, ...csvRows].map((r) => r.join(",")).join("\n")
     const blob = new Blob([csv], { type: "text/csv" })
@@ -195,14 +273,15 @@ function InventoryPage() {
         <h2 className="text-2xl font-bold text-slate-900">Inventory</h2>
         <div className="flex items-center gap-2">
         <button
-          onClick={() => { setSyncNotice(null); setSyncOpen(true) }}
-          className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 transition-colors"
+          onClick={() => syncSheet(products)}
+          disabled={sheetState.status === "syncing"}
+          className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-60 transition-colors"
         >
-          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className={`h-3.5 w-3.5 ${sheetState.status === "syncing" ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
               d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          Sync from Sheet
+          {sheetState.status === "syncing" ? "Syncing sheet…" : "Sync Sheet"}
         </button>
         <button
           onClick={downloadCSV}
@@ -217,15 +296,39 @@ function InventoryPage() {
         </div>
       </div>
 
-      {syncNotice && (
-        <div className={`rounded-lg border px-4 py-3 text-sm ${syncNotice.type === "error"
-          ? "border-red-200 bg-red-50 text-red-700"
-          : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
-          {syncNotice.text}
+      {sheetState.status === "error" && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          Couldn't read the warehouse sheet: {sheetState.error}
+          {lastSynced && <> Showing the count stored on {new Date(lastSynced).toLocaleString("en-IN")}.</>}
         </div>
       )}
 
-      <SheetSyncModal isOpen={syncOpen} onClose={() => setSyncOpen(false)} onApplied={handleSynced} />
+      {openDiffs.length > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <span>
+            ⚑ <span className="font-semibold">{openDiffs.length} item{openDiffs.length !== 1 ? "s" : ""}</span> differ from the
+            warehouse sheet{countLabel ? ` (${countLabel} count)` : ""}. Check and confirm which number is right.
+          </span>
+          <button onClick={() => setReviewOpen(true)} className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700">
+            Review differences
+          </button>
+        </div>
+      ) : Object.keys(recon).length > 0 && (
+        <p className="text-xs text-slate-500">
+          ✓ System stock agrees with the warehouse sheet{countLabel ? ` (${countLabel} count)` : ""}
+          {lastSynced && <> · synced {new Date(lastSynced).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</>}
+          {" · "}<button onClick={() => setReviewOpen(true)} className="text-indigo-600 hover:underline">details</button>
+        </p>
+      )}
+
+      <SheetReconcileModal
+        isOpen={reviewOpen}
+        onClose={() => setReviewOpen(false)}
+        products={products}
+        recon={recon}
+        plan={sheetPlan}
+        onResolved={loadProducts}
+      />
 
       <div className="space-y-3">
         <div className="flex items-center gap-2">
@@ -238,6 +341,8 @@ function InventoryPage() {
           costs={costs}
           onCostChange={handleCostChange}
           onCostBlur={saveCost}
+          recon={recon}
+          onReview={() => setReviewOpen(true)}
         />
       </div>
 
@@ -252,6 +357,8 @@ function InventoryPage() {
           costs={costs}
           onCostChange={handleCostChange}
           onCostBlur={saveCost}
+          recon={recon}
+          onReview={() => setReviewOpen(true)}
         />
       </div>
 
