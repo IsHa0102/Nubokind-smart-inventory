@@ -295,3 +295,15 @@ export function lineLabel(productKey, variantKey) {
   const v = p.variants?.find((x) => x.key === variantKey)
   return v ? `${p.label} — ${v.label}` : p.label
 }
+
+// Master product ID stored on every consignment line (migration 008), so the
+// amazon-dashboard consignment calendar can read what was sent without a
+// second copy of this catalogue. The variant's ID wins; a product without
+// variants uses its own. null = not a sellable master (e.g. Potli) — the
+// dashboard flags such a line instead of guessing.
+export function masterIdFor(productKey, variantKey) {
+  const p = SHIPMENT_PRODUCTS.find((x) => x.key === productKey)
+  if (!p) return null
+  const v = variantKey ? p.variants?.find((x) => x.key === variantKey) : null
+  return v?.masterId ?? (p.variants?.length ? null : p.masterId ?? null)
+}

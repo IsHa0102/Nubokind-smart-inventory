@@ -1,5 +1,5 @@
 import { supabase } from "./supabaseClient"
-import { buildAllDeductions, makeComponentResolver } from "../lib/shipmentConfig"
+import { buildAllDeductions, makeComponentResolver, masterIdFor } from "../lib/shipmentConfig"
 
 const BUCKET = "inventory-images"
 
@@ -461,7 +461,7 @@ export const createPlannedShipment = async ({ destination, notes, planned_date, 
   if (lines && lines.length > 0) {
     const { error: linesErr } = await supabase
       .from("warehouse_planned_shipment_lines")
-      .insert(lines.map((l) => ({ ...l, shipment_id: shipment.id })))
+      .insert(lines.map((l) => ({ ...l, master_id: masterIdFor(l.sku_key, l.variant_key), shipment_id: shipment.id })))
     if (linesErr) throw new Error(linesErr.message)
   }
 
@@ -492,7 +492,7 @@ export const updatePlannedShipment = async (id, { destination, notes, planned_da
   if (lines && lines.length > 0) {
     const { error: insErr } = await supabase
       .from("warehouse_planned_shipment_lines")
-      .insert(lines.map((l) => ({ sku_key: l.sku_key, variant_key: l.variant_key, quantity: l.quantity, label: l.label, shipment_id: id })))
+      .insert(lines.map((l) => ({ sku_key: l.sku_key, variant_key: l.variant_key, master_id: masterIdFor(l.sku_key, l.variant_key), quantity: l.quantity, label: l.label, shipment_id: id })))
     if (insErr) throw new Error(insErr.message)
   }
 }
@@ -536,6 +536,7 @@ export const saveConsignment = async ({
     p_corrugation_boxes: corr,
     p_lines: lines.map((l) => ({
       sku_key: l.sku_key, variant_key: l.variant_key || null, quantity: Number(l.quantity), label: l.label,
+      master_id: masterIdFor(l.sku_key, l.variant_key || null),
     })),
     p_deductions: deductions,
     p_image_urls: imageUrls,
