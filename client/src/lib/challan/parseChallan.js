@@ -52,6 +52,10 @@ function joinCellLines(lineTexts) {
 // ── Table extraction ────────────────────────────────────────────────────────
 const QTY_HEADER = /^(qty\.?|quantity\*?)$/i
 const isWholeNumber = (s) => /^\d{1,3}(,\d{3})+$|^\d+$/.test(s.trim())
+// Quantity cell: a whole number, optionally printed with zero decimals the way
+// invoicing tools do ("120.00").
+const isQtyNumber = (s) => /^(\d{1,3}(,\d{3})+|\d+)(\.0+)?$/.test(s.trim())
+const toQty = (s) => Number(s.trim().replace(/,/g, ""))
 
 function findColumns(items) {
   const qty = [...items].sort(byReadingOrder).find((i) => QTY_HEADER.test(i.str.trim()))
@@ -74,9 +78,19 @@ function findColumns(items) {
       .filter((i) => i.str.trim() && !isWholeNumber(i.str))
       .sort((a, b) => b.y - a.y)
     if (below.length) c.label += ` ${below.map((i) => i.str.trim()).join(" ")}`
+    // Header words stacked above, for headers wrapped onto several lines
+    // ("Item" / "Numbe" / "r" on Zoho invoices). Kept apart from `label` so the
+    // Qty column's first word is unaffected.
+    c.above = items
+      .filter((i) => i.page === qty.page && Math.abs(i.x - c.x) <= 3 && i.y > qty.y + LINE_TOLERANCE && i.y <= qty.y + 25)
+      .filter((i) => i.str.trim())
+      .sort((a, b) => b.y - a.y)
+      .map((i) => i.str.trim())
+      .join(" ")
   }
   const columns = cells.map((c, i) => ({
     label: c.label.toLowerCase().replace(/\s+/g, " "),
+    stack: `${c.above} ${c.label}`.toLowerCase().replace(/\s+/g, " ").trim(),
     from: c.x - 3,
     to: i + 1 < cells.length ? cells[i + 1].x - 3 : Infinity,
   }))
@@ -87,11 +101,14 @@ function findColumns(items) {
     y: qty.y,
     qty: columns.find((c) => QTY_HEADER.test(c.label.split(" ")[0])) || pick(/qty|quantity/),
     desc: pick(/description/) || pick(/product|item name|particulars/),
-    code: pick(/item code/),
+    code: pick(/item code/) || columns.find((c) => /item ?numb/.test(c.stack)),
   }
 }
 
 const inCol = (col, it) => col && it.x >= col.from && it.x < col.to
+// Numbers are often right-aligned, starting left of their header; place them
+// by their centre instead.
+const centreInCol = (col, it) => col && it.x + (it.w || 0) / 2 >= col.from && it.x + (it.w || 0) / 2 < col.to
 const after = (it, page, y) => it.page > page || (it.page === page && it.y < y)
 
 export function extractTable(items) {
@@ -107,7 +124,7 @@ export function extractTable(items) {
   const beforeEnd = (i) => !end || i.page < end.page || (i.page === end.page && i.y > end.y + LINE_TOLERANCE)
   const tableItems = body.filter(beforeEnd)
 
-  const anchors = tableItems.filter((i) => inCol(cols.qty, i) && isWholeNumber(i.str))
+  const anchors = tableItems.filter((i) => centreInCol(cols.qty, i) && isQtyNumber(i.str))
   const rows = anchors.map((a, k) => {
     const next = anchors[k + 1]
     const top = a.y + 4                                             // description may sit a little above the qty
@@ -119,15 +136,15 @@ export function extractTable(items) {
       : ""
     return {
       description: joinCellLines(descLines),
-      quantity: Number(a.str.replace(/,/g, "")),
+      quantity: toQty(a.str),
       itemCode: /^\d+$/.test(code) ? code : "",
     }
   }).filter((r) => r.description && r.quantity > 0)
 
   // Printed total on the "Total" line, when the Qty column carries one (Amazon).
   const totalToken = end && body.find((i) =>
-    i.page === end.page && Math.abs(i.y - end.y) <= LINE_TOLERANCE && inCol(cols.qty, i) && isWholeNumber(i.str))
-  const printedTotal = totalToken ? Number(totalToken.str.replace(/,/g, "")) : null
+    i.page === end.page && Math.abs(i.y - end.y) <= LINE_TOLERANCE && inCol(cols.qty, i) && isQtyNumber(i.str))
+  const printedTotal = totalToken ? toQty(totalToken.str) : null
 
   return { rows, printedTotal, error: rows.length ? null : "Found the table but no item rows in it." }
 }
@@ -173,6 +190,12 @@ function headerFields(platform, text) {
     f.challanDate = parseSlashDate(grab(/Document Date\s*:?\s*([\d/]+)/i))
     const boxes = grab(/Number of box(?:es)?\s*:?\s*(\d+)/i)
     f.boxes = boxes ? Number(boxes) : null
+  } else if (platform === "blinkit" && /TAX INVOICE/i.test(text) && !/R\.?O\.? Number/i.test(text)) {
+    // Our own tax invoice to Blinkit (Zoho): P.O. number, day-first date.
+    f.reference = grab(/P\.?O\.?\s*#\s*:?\s*(\d+)/i)
+    const d = /Invoice Date\s*:?\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/i.exec(text)
+    if (d) f.challanDate = iso(d[3], Number(d[2]), Number(d[1]))
+    f.hints.push("Read from the tax invoice to Blinkit — set the dispatch date to your appointment day.")
   } else if (platform === "blinkit") {
     f.reference = grab(/R\.?O\.? Number\s*:?\s*(\d+)/i)
     const d = /\bDate\s*:\s*([A-Za-z]{3})[a-z]*\.?\s*(\d{1,2}),\s*(\d{4})/.exec(text)
